@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Simulador Fetal — SEM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #0B1622;
+  --panel:   #111E2E;
+  --border:  #1C3048;
+  --teal:    #00D98B;
+  --blue:    #4A9EFF;
+  --orange:  #FF7043;
+  --red:     #FF4757;
+  --gold:    #FFD166;
+  --text:    #D8EEF8;
+  --dim:     #5A7A90;
+  --dimmer:  #2A4560;
+  --mono:    'JetBrains Mono', monospace;
+  --sans:    'Inter', system-ui, sans-serif;
+  --radius:  6px;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; }
+#root { height: 100%; display: flex; flex-direction: column; }
+
+/* ── APP SHELL ──────────────────────────────────────────────────────── */
+.app { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── HEADER ─────────────────────────────────────────────────────────── */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.logo { display: flex; align-items: baseline; gap: 8px; }
+.logo-sem { font-family: var(--mono); font-weight: 600; font-size: 13px; color: var(--teal); letter-spacing: 2px; }
+.logo-title { font-size: 13px; font-weight: 500; color: var(--dim); }
+
+.conn-area { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.mode-btn {
+  padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
+  background: transparent; color: var(--dim); cursor: pointer; font-size: 12px; font-family: var(--sans);
+  transition: all .15s;
+}
+.mode-btn.active { border-color: var(--teal); color: var(--teal); background: #00D98B12; }
+.ip-input {
+  padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 12px; width: 130px;
+}
+.btn-connect {
+  padding: 5px 14px; border-radius: 4px; border: 1px solid var(--teal);
+  background: #00D98B18; color: var(--teal); cursor: pointer; font-size: 12px;
+  font-weight: 500; transition: background .15s;
+}
+.btn-connect:hover { background: #00D98B28; }
+.conn-status { display: flex; align-items: center; gap: 8px; }
+.dot-green { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 6px var(--teal); flex-shrink: 0; }
+.dot-red   { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+.conn-label { font-family: var(--mono); font-size: 12px; color: var(--teal); }
+.btn-ghost-sm {
+  padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border);
+  background: transparent; color: var(--dim); cursor: pointer; font-size: 11px;
+}
+
+/* ── PRESSURE READOUT ───────────────────────────────────────────────── */
+.pressure-section {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px 6px;
+  flex-shrink: 0;
+}
+.pressure-value { font-family: var(--mono); font-size: 42px; font-weight: 600; color: var(--teal); line-height: 1; }
+.pressure-unit  { font-family: var(--mono); font-size: 14px; color: var(--dim); align-self: flex-end; padding-bottom: 6px; }
+.state-badge {
+  padding: 3px 10px; border-radius: 4px; font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: 1px; align-self: flex-end; margin-bottom: 6px;
+}
+.state-idle    { background: #2A4560; color: var(--dim); }
+.state-rise    { background: #00D98B20; color: var(--teal); border: 1px solid #00D98B50; }
+.state-peak    { background: #4A9EFF20; color: var(--blue); border: 1px solid #4A9EFF50; }
+.state-fall    { background: #FF704320; color: var(--orange); border: 1px solid #FF704350; }
+.state-inter   { background: #2A4560; color: var(--dim); }
+.state-cal     { background: #FFD16620; color: var(--gold); border: 1px solid #FFD16650; }
+.state-zeroing { background: #FFD16620; color: var(--gold); }
+.state-error   { background: #FF475720; color: var(--red); border: 1px solid #FF475750; }
+.target-label  { font-family: var(--mono); font-size: 12px; color: var(--blue); align-self: flex-end; margin-bottom: 7px; }
+
+/* ── GRAPH ───────────────────────────────────────────────────────────── */
+.graph-wrap { padding: 0 16px 8px; flex-shrink: 0; }
+canvas { width: 100% !important; height: auto !important; border-radius: var(--radius); display: block; }
+
+/* ── CONTROLS BAR ───────────────────────────────────────────────────── */
+.controls-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px;
+  background: var(--panel); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  flex-shrink: 0; flex-wrap: wrap;
+}
+.btn-action {
+  padding: 6px 14px; border-radius: var(--radius); border: 1px solid var(--border);
+  background: transparent; color: var(--text); cursor: pointer; font-size: 13px;
+  font-family: var(--sans); transition: all .15s;
+}
+.btn-action:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+.btn-action:disabled { opacity: .35; cursor: default; }
+.btn-run {
+  padding: 6px 18px; border-radius: var(--radius); border: none;
+  background: var(--teal); color: #0B1622; cursor: pointer; font-size: 13px;
+  font-weight: 600; font-family: var(--sans); transition: opacity .15s;
+}
+.btn-run:hover:not(:disabled) { opacity: .85; }
+.btn-run:disabled { opacity: .35; cursor: default; }
+.btn-stop {
+  padding: 6px 18px; border-radius: var(--radius); border: none;
+  background: var(--red); color: #fff; cursor: pointer; font-size: 13px;
+  font-weight: 600; font-family: var(--sans);
+}
+.duration-hint { font-size: 12px; color: var(--dim); margin-left: 4px; }
+.warn-hint { font-size: 12px; color: var(--orange); margin-left: 4px; }
+
+/* ── TABS ────────────────────────────────────────────────────────────── */
+.tabs {
+  display: flex; gap: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+.tab {
+  padding: 9px 16px; background: transparent; border: none;
+  color: var(--dim); cursor: pointer; font-size: 13px; font-family: var(--sans);
+  border-bottom: 2px solid transparent; white-space: nowrap; transition: all .15s;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--teal); border-bottom-color: var(--teal); }
+
+/* ── TAB CONTENT ─────────────────────────────────────────────────────── */
+.tab-content { flex: 1; overflow-y: auto; padding: 16px; }
+.section-hint { color: var(--dim); font-size: 12px; margin-bottom: 14px; line-height: 1.6; }
+
+/* ── PROTOCOL TABLE ──────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; }
+thead { background: #0d1a28; }
+th {
+  padding: 8px 10px; text-align: left; font-size: 11px; color: var(--dim);
+  font-weight: 500; white-space: nowrap; border-bottom: 1px solid var(--border);
+}
+td { padding: 4px 6px; border-bottom: 1px solid #0d1a28; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #0d1e30; }
+.row-num { font-family: var(--mono); font-size: 11px; color: var(--dim); padding-left: 10px; }
+
+td input[type="number"] {
+  width: 68px; padding: 5px 6px; border-radius: 4px;
+  border: 1px solid transparent; background: #0d1a28;
+  color: var(--text); font-family: var(--mono); font-size: 13px;
+  transition: border-color .15s;
+}
+td input[type="number"]:focus { outline: none; border-color: var(--teal); }
+input[type="number"]::-webkit-inner-spin-button { opacity: .4; }
+
+.btn-icon {
+  width: 26px; height: 26px; border-radius: 4px; border: 1px solid var(--border);
+  background: transparent; color: var(--dim); cursor: pointer; font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.btn-icon:hover { border-color: var(--red); color: var(--red); }
+.protocol-footer { margin-top: 10px; display: flex; gap: 8px; }
+.btn-ghost {
+  padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--border);
+  background: transparent; color: var(--dim); cursor: pointer; font-size: 12px;
+  transition: all .15s;
+}
+.btn-ghost:hover { border-color: var(--teal); color: var(--teal); }
+
+/* ── CALIBRATION ─────────────────────────────────────────────────────── */
+.cal-points { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.cal-btn {
+  padding: 8px 16px; border-radius: var(--radius); border: 1px solid var(--border);
+  background: transparent; color: var(--text); cursor: pointer; font-family: var(--mono);
+  font-size: 13px; transition: all .15s; min-width: 80px;
+}
+.cal-btn:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+.cal-btn.active { border-color: var(--gold); background: #FFD16618; color: var(--gold); }
+.cal-btn:disabled { opacity: .35; cursor: default; }
+.cal-custom { display: flex; gap: 6px; align-items: center; }
+.cal-custom-input {
+  width: 80px; padding: 7px 8px; border-radius: 4px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--text); font-family: var(--mono); font-size: 13px;
+}
+.btn-primary {
+  padding: 7px 14px; border-radius: var(--radius); border: none;
+  background: var(--blue); color: #fff; cursor: pointer; font-size: 13px;
+  font-weight: 500; transition: opacity .15s;
+}
+.btn-primary:hover { opacity: .85; }
+.btn-primary:disabled { opacity: .35; cursor: default; }
+
+.cal-register {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; margin-bottom: 20px;
+}
+.cal-register h4 { font-size: 12px; font-weight: 500; color: var(--dim); margin-bottom: 12px; }
+.cal-register-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.cal-register-row .dim { font-size: 13px; }
+.cal-register-row strong { color: var(--text); font-family: var(--mono); }
+.monitor-reading-input {
+  flex: 1; min-width: 160px; padding: 7px 10px; border-radius: 4px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text); font-family: var(--mono); font-size: 13px;
+}
+.monitor-reading-input:focus { outline: none; border-color: var(--blue); }
+h4 { font-size: 12px; font-weight: 600; color: var(--dim); margin-bottom: 10px; letter-spacing: .5px; }
+
+/* Calibration log table */
+.cal-log { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cal-log th { padding: 7px 10px; text-align: left; font-size: 11px; color: var(--dim); font-weight: 500; border-bottom: 1px solid var(--border); }
+.cal-log td { padding: 8px 10px; border-bottom: 1px solid #0d1a28; font-family: var(--mono); }
+.badge-ok  { display: inline-block; padding: 2px 8px; border-radius: 3px; background: #00D98B18; color: var(--teal); font-size: 11px; }
+.badge-err { display: inline-block; padding: 2px 8px; border-radius: 3px; background: #FF475718; color: var(--red); font-size: 11px; }
+.cal-actions { margin-top: 10px; }
+
+/* ── FCF PANEL ───────────────────────────────────────────────────────── */
+.fcf-panel { max-width: 580px; }
+.fcf-info {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 24px;
+}
+.fcf-icon { font-size: 28px; color: var(--red); margin-bottom: 10px; }
+.fcf-info h3 { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+.fcf-info p { font-size: 13px; color: var(--dim); line-height: 1.7; margin-bottom: 20px; }
+.fcf-values { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
+.fcf-val-group {}
+.fcf-label { font-size: 11px; color: var(--dim); display: block; margin-bottom: 6px; }
+.fcf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fcf-chip {
+  padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
+  font-family: var(--mono); font-size: 12px; color: var(--text);
+}
+.fcf-note {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: #4A9EFF10; border: 1px solid #4A9EFF30;
+  border-radius: var(--radius); padding: 12px;
+  font-size: 12px; color: var(--dim); line-height: 1.6;
+}
+.note-icon { color: var(--blue); font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+
+/* ── LOG PANEL ───────────────────────────────────────────────────────── */
+.log-panel { display: flex; flex-direction: column; gap: 4px; }
+.log-entry { display: flex; gap: 12px; align-items: baseline; padding: 5px 8px; border-radius: 4px; }
+.log-entry:hover { background: var(--panel); }
+.log-ts  { font-family: var(--mono); font-size: 11px; color: var(--dimmer); flex-shrink: 0; }
+.log-msg { font-size: 13px; }
+.log-ok   .log-msg { color: var(--teal); }
+.log-warn .log-msg { color: var(--gold); }
+.log-err  .log-msg { color: var(--red); }
+.log-info .log-msg { color: var(--text); }
+
+/* ── GENERIC ─────────────────────────────────────────────────────────── */
+.dim { color: var(--dim); }
+
+@media (max-width: 500px) {
+  .pressure-value { font-size: 32px; }
+  .controls-bar { gap: 6px; }
+  .btn-run, .btn-stop { padding: 6px 12px; }
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ─── CONSTANTES ──────────────────────────────────────────────────────
+const GRAPH_WINDOW_MS = 5 * 60 * 1000;   // 5 minutos de ventana
+const MAX_MMHG        = 100;
+const MAX_POINTS      = 4000;
+
+const CAL_POINTS = [10, 20, 30, 40, 55, 70, 100];
+
+const DEFAULT_PROTOCOL = [
+  { id: 1, mmhg: 10, rise: 20, peak: 20, fall: 20, interval: 60, repeat: 3 },
+  { id: 2, mmhg: 30, rise: 25, peak: 30, fall: 25, interval: 60, repeat: 3 },
+  { id: 3, mmhg: 55, rise: 30, peak: 30, fall: 30, interval: 60, repeat: 3 },
+];
+
+// ─── COMM LAYER ───────────────────────────────────────────────────────
+// Abstrae WebSerial (USB) y WebSocket (WiFi)
+class Comm {
+  constructor(onData, onDisconnect) {
+    this.onData = onData;
+    this.onDisconnect = onDisconnect;
+    this.type = null;
+    this.port = null;
+    this.ws = null;
+    this.reader = null;
+    this.dec = new TextDecoder();
+    this.buf = '';
+  }
+
+  async connectSerial() {
+    this.port = await navigator.serial.requestPort();
+    await this.port.open({ baudRate: 115200 });
+    this.type = 'serial';
+    this._readLoop();
+  }
+
+  async _readLoop() {
+    this.reader = this.port.readable.getReader();
+    try {
+      while (true) {
+        const { value, done } = await this.reader.read();
+        if (done) break;
+        this.buf += this.dec.decode(value);
+        const lines = this.buf.split('\n');
+        this.buf = lines.pop();
+        for (const l of lines) {
+          const t = l.trim();
+          if (t) try { this.onData(JSON.parse(t)); } catch(e) {}
+        }
+      }
+    } catch(e) { this.onDisconnect(); }
+  }
+
+  connectWS(ip) {
+    return new Promise((res, rej) => {
+      this.ws = new WebSocket(`ws://${ip}:81`);
+      this.ws.onopen    = () => { this.type = 'ws'; res(); };
+      this.ws.onerror   = () => rej(new Error('No se pudo conectar al ESP32'));
+      this.ws.onclose   = () => this.onDisconnect();
+      this.ws.onmessage = (e) => { try { this.onData(JSON.parse(e.data)); } catch(e) {} };
+    });
+  }
+
+  async send(obj) {
+    const str = JSON.stringify(obj) + '\n';
+    if (this.type === 'serial' && this.port?.writable) {
+      const w = this.port.writable.getWriter();
+      await w.write(new TextEncoder().encode(str));
+      w.releaseLock();
+    } else if (this.type === 'ws' && this.ws?.readyState === 1) {
+      this.ws.send(str);
+    }
+  }
+
+  async disconnect() {
+    try { if (this.reader) await this.reader.cancel(); } catch(e) {}
+    try { if (this.port) await this.port.close(); } catch(e) {}
+    try { if (this.ws) this.ws.close(); } catch(e) {}
+    this.type = null; this.port = null; this.ws = null; this.reader = null;
+  }
+}
+
+// ─── GRAPH ───────────────────────────────────────────────────────────
+function PressureGraph({ data, state, target }) {
+  const canvasRef = useRef(null);
+  const animRef   = useRef(null);
+  const dataRef   = useRef(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const draw = () => {
+      const pts = dataRef.current;
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      const PL = 52, PR = 16, PT = 18, PB = 32;
+      const GW = W - PL - PR, GH = H - PT - PB;
+
+      // Fondo
+      ctx.fillStyle = '#0B1622';
+      ctx.fillRect(0, 0, W, H);
+
+      // Grid horizontal
+      for (let v = 0; v <= MAX_MMHG; v += 10) {
+        const y = PT + GH - (v / MAX_MMHG) * GH;
+        ctx.strokeStyle = v % 50 === 0 ? '#1C3048' : '#132030';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(PL + GW, y); ctx.stroke();
+
+        ctx.fillStyle = v % 20 === 0 ? '#5A7A90' : '#2A4560';
+        ctx.font = `10px JetBrains Mono`;
+        ctx.textAlign = 'right';
+        ctx.fillText(v, PL - 6, y + 3.5);
+      }
+
+      // Eje Y label
+      ctx.save();
+      ctx.translate(11, PT + GH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#2A4560';
+      ctx.font = '10px Inter';
+      ctx.fillText('mmHg', 0, 0);
+      ctx.restore();
+
+      // Eje X
+      ctx.fillStyle = '#2A4560';
+      ctx.font = '10px JetBrains Mono';
+      ctx.textAlign = 'center';
+      const now = pts.length > 0 ? pts[pts.length - 1].t : Date.now();
+      for (let s = 0; s <= 300; s += 60) {
+        const x = PL + (s / 300) * GW;
+        ctx.fillText(`${s}s`, x, H - 8);
+      }
+
+      // Línea target (punteada azul)
+      if (target > 0) {
+        const ty = PT + GH - (Math.min(target, MAX_MMHG) / MAX_MMHG) * GH;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = '#4A9EFF60';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(PL, ty); ctx.lineTo(PL + GW, ty); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#4A9EFF';
+        ctx.font = '10px JetBrains Mono';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${target}`, PL + GW - 4, ty - 4);
+      }
+
+      if (pts.length < 2) {
+        // Placeholder cuando no hay datos
+        ctx.fillStyle = '#1C3048';
+        ctx.font = '12px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText('Esperando datos del dispositivo...', PL + GW / 2, PT + GH / 2);
+        animRef.current = requestAnimationFrame(draw);
+        return;
+      }
+
+      // Curva de presión
+      const winStart = now - GRAPH_WINDOW_MS;
+      const visibles = pts.filter(p => p.t >= winStart);
+      if (visibles.length < 2) { animRef.current = requestAnimationFrame(draw); return; }
+
+      const xOf = (t) => PL + ((t - winStart) / GRAPH_WINDOW_MS) * GW;
+      const yOf = (p) => PT + GH - (Math.min(p, MAX_MMHG) / MAX_MMHG) * GH;
+
+      // Relleno degradado
+      const grad = ctx.createLinearGradient(0, PT, 0, PT + GH);
+      grad.addColorStop(0, '#00D98B28');
+      grad.addColorStop(1, '#00D98B00');
+      ctx.beginPath();
+      ctx.moveTo(xOf(visibles[0].t), yOf(visibles[0].p));
+      visibles.forEach(p => ctx.lineTo(xOf(p.t), yOf(p.p)));
+      ctx.lineTo(xOf(visibles[visibles.length - 1].t), PT + GH);
+      ctx.lineTo(xOf(visibles[0].t), PT + GH);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Línea principal
+      ctx.beginPath();
+      ctx.strokeStyle = '#00D98B';
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      visibles.forEach((p, i) => {
+        i === 0 ? ctx.moveTo(xOf(p.t), yOf(p.p)) : ctx.lineTo(xOf(p.t), yOf(p.p));
+      });
+      ctx.stroke();
+
+      // Punto actual (último)
+      const last = visibles[visibles.length - 1];
+      const lx = xOf(last.t), ly = yOf(last.p);
+      ctx.beginPath();
+      ctx.arc(lx, ly, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#00D98B';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(lx, ly, 7, 0, Math.PI * 2);
+      ctx.fillStyle = '#00D98B30';
+      ctx.fill();
+
+      // Badge de estado
+      const stColors = {
+        IDLE:'#2A4560', RISE:'#00D98B', PEAK:'#4A9EFF',
+        FALL:'#FF7043', CAL:'#FFD166', ERROR:'#FF4757', INTER:'#2A4560'
+      };
+      const sc = stColors[state] || '#2A4560';
+      const stLabel = state || 'IDLE';
+      ctx.font = '600 11px JetBrains Mono';
+      const tw = ctx.measureText(stLabel).width;
+      ctx.fillStyle = sc + '22';
+      ctx.fillRect(PL + GW - tw - 20, PT + 4, tw + 16, 20);
+      ctx.fillStyle = sc;
+      ctx.textAlign = 'left';
+      ctx.fillText(stLabel, PL + GW - tw - 12, PT + 17);
+
+      animRef.current = requestAnimationFrame(draw);
+    };
+
+    animRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animRef.current);
+  }, [state, target]);
+
+  return (
+    <canvas ref={canvasRef} width={1100} height={220}
+      style={{ width:'100%', height:'auto', borderRadius:'6px', display:'block' }} />
+  );
+}
+
+// ─── PROTOCOL EDITOR ─────────────────────────────────────────────────
+const COLS = [
+  { key:'mmhg',     label:'mmHg',        min:5,  max:100, step:5  },
+  { key:'rise',     label:'Ascenso s',   min:5,  max:120, step:5  },
+  { key:'peak',     label:'Pico s',      min:5,  max:120, step:5  },
+  { key:'fall',     label:'Descenso s',  min:5,  max:120, step:5  },
+  { key:'interval', label:'Intervalo s', min:10, max:300, step:10 },
+  { key:'repeat',   label:'Repetir',     min:1,  max:20,  step:1  },
+];
+
+function ProtocolEditor({ protocol, setProtocol }) {
+  const upd = (id, k, v) =>
+    setProtocol(p => p.map(r => r.id === id ? { ...r, [k]: Number(v) } : r));
+
+  return (
+    <div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              {COLS.map(c => <th key={c.key}>{c.label}</th>)}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {protocol.map((row, i) => (
+              <tr key={row.id}>
+                <td className="row-num">{i + 1}</td>
+                {COLS.map(c => (
+                  <td key={c.key}>
+                    <input type="number" min={c.min} max={c.max} step={c.step}
+                      value={row[c.key]}
+                      onChange={e => upd(row.id, c.key, e.target.value)} />
+                  </td>
+                ))}
+                <td>
+                  <button className="btn-icon"
+                    onClick={() => setProtocol(p => p.filter(r => r.id !== row.id))}>✕</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="protocol-footer">
+        <button className="btn-ghost" onClick={() => {
+          const last = protocol[protocol.length - 1] || DEFAULT_PROTOCOL[0];
+          setProtocol(p => [...p, { ...last, id: Date.now() }]);
+        }}>+ Agregar grupo</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── CAL LOG ─────────────────────────────────────────────────────────
+function CalLog({ log }) {
+  if (!log.length) return <p className="dim" style={{fontSize:12}}>Sin registros aún</p>;
+  return (
+    <table className="cal-log">
+      <thead>
+        <tr><th>Set point</th><th>Lectura monitor</th><th>Error</th><th>Estado</th></tr>
+      </thead>
+      <tbody>
+        {log.map((r, i) => {
+          const err = r.measured - r.target;
+          const ok = Math.abs(err) <= 5;
+          return (
+            <tr key={i}>
+              <td>{r.target} mmHg</td>
+              <td>{r.measured.toFixed(1)} mmHg</td>
+              <td style={{color: ok ? 'var(--teal)' : 'var(--red)'}}>
+                {err > 0 ? '+' : ''}{err.toFixed(1)} mmHg
+              </td>
+              <td><span className={ok ? 'badge-ok' : 'badge-err'}>{ok ? '✓ OK' : '✗ FUERA'}</span></td>
+            </tr>
+          );
+        })}
+        {log.length > 1 && (() => {
+          const errs = log.map(r => Math.abs(r.measured - r.target));
+          const max  = Math.max(...errs);
+          const avg  = errs.reduce((a, b) => a + b, 0) / errs.length;
+          const pass = max <= 5;
+          return (
+            <tr style={{background:'#0d1a28'}}>
+              <td colSpan={2} style={{fontSize:11,color:'var(--dim)',paddingTop:10}}>
+                Error máx: <strong style={{color:pass?'var(--teal)':'var(--red)'}}>{max.toFixed(1)} mmHg</strong>
+                &nbsp;·&nbsp; Error promedio: <strong>{avg.toFixed(1)} mmHg</strong>
+              </td>
+              <td colSpan={2} style={{fontSize:11,paddingTop:10}}>
+                <span className={pass ? 'badge-ok' : 'badge-err'} style={{fontSize:12}}>
+                  {pass ? '✓ TRANSDUCTOR APTO' : '✗ REQUIERE AJUSTE'}
+                </span>
+              </td>
+            </tr>
+          );
+        })()}
+      </tbody>
+    </table>
+  );
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────
+function App() {
+  const [connected,     setConnected]     = useState(false);
+  const [connMode,      setConnMode]      = useState('serial');
+  const [wifiIP,        setWifiIP]        = useState('192.168.4.1');
+  const [connErr,       setConnErr]       = useState('');
+
+  const [graphData,     setGraphData]     = useState([]);
+  const [currentP,      setCurrentP]      = useState(0);
+  const [currentState,  setCurrentState]  = useState('IDLE');
+  const [currentTarget, setCurrentTarget] = useState(0);
+  const [currentCont,   setCurrentCont]   = useState(0);
+
+  const [protocol,      setProtocol]      = useState(DEFAULT_PROTOCOL);
+  const [running,       setRunning]       = useState(false);
+
+  const [calPoint,      setCalPoint]      = useState(30);
+  const [calLog,        setCalLog]        = useState([]);
+  const [monitorReading,setMonitorReading]= useState('');
+
+  const [events,        setEvents]        = useState([]);
+  const [tab,           setTab]           = useState('protocol');
+
+  const commRef  = useRef(null);
+  const bufRef   = useRef([]);
+
+  const addEvent = (msg, type = 'info') => {
+    const ts = new Date().toLocaleTimeString('es-AR', {hour12:false});
+    setEvents(prev => [{ ts, msg, type }, ...prev].slice(0, 80));
+  };
+
+  const onData = useCallback((msg) => {
+    // Telemetría de presión
+    if (msg.t !== undefined && msg.p !== undefined) {
+      bufRef.current = [...bufRef.current.slice(-MAX_POINTS), { t: msg.t, p: msg.p }];
+      setGraphData([...bufRef.current]);
+      setCurrentP(msg.p);
+      if (msg.s) setCurrentState(msg.s);
+      if (msg.tgt !== undefined) setCurrentTarget(msg.tgt);
+      if (msg.c  !== undefined) setCurrentCont(msg.c);
+      return;
+    }
+    // Eventos
+    if (msg.event) {
+      switch (msg.event) {
+        case 'ready':
+          addEvent(`Dispositivo listo${msg.data?.wifi ? ` · WiFi ${msg.data.ip}` : ''}`, 'ok');
+          break;
+        case 'zeroed':
+          addEvent(`Zero calibrado (offset: ${msg.data?.offset ?? '?'} mmHg)`, 'ok');
+          break;
+        case 'started':
+          addEvent(`Protocolo iniciado — ${msg.data?.groups} grupos`, 'ok');
+          setRunning(true);
+          break;
+        case 'peak':
+          addEvent(`Contracción ${(msg.data?.c ?? 0) + 1} rep ${(msg.data?.r ?? 0) + 1} — pico`);
+          break;
+        case 'inter':
+          addEvent(`Intervalo entre contracciones`);
+          break;
+        case 'stopped':
+          addEvent('Protocolo detenido', 'warn');
+          setRunning(false);
+          break;
+        case 'done':
+          addEvent('Protocolo completado ✓', 'ok');
+          setRunning(false);
+          break;
+        case 'calibrating':
+          addEvent(`Calibrando → ${msg.data?.target} mmHg`, 'ok');
+          break;
+        default:
+          addEvent(msg.event);
+      }
+    }
+  }, []);
+
+  const onDisconnect = useCallback(() => {
+    setConnected(false);
+    setRunning(false);
+    setCurrentState('IDLE');
+    addEvent('Dispositivo desconectado', 'warn');
+  }, []);
+
+  const connect = async () => {
+    setConnErr('');
+    const comm = new Comm(onData, onDisconnect);
+    commRef.current = comm;
+    try {
+      if (connMode === 'serial') {
+        if (!navigator.serial) throw new Error('WebSerial no disponible. Usá Chrome en escritorio o Android.');
+        await comm.connectSerial();
+      } else {
+        await comm.connectWS(wifiIP);
+      }
+      setConnected(true);
+      addEvent(`Conectado por ${connMode === 'serial' ? 'USB' : 'WiFi'}`, 'ok');
+    } catch (e) {
+      setConnErr(e.message);
+      addEvent(e.message, 'err');
+    }
+  };
+
+  const disconnect = async () => {
+    await commRef.current?.disconnect();
+    setConnected(false);
+    setRunning(false);
+  };
+
+  const send = (obj) => commRef.current?.send(obj);
+
+  const doZero  = () => { send({ cmd: 'zero' }); addEvent('Zeroing — esperá 4 segundos'); };
+  const doStop  = () => { send({ cmd: 'stop' }); };
+  const doRun   = () => { send({ cmd: 'run', protocol }); };
+  const doCal   = (p) => { setCalPoint(p); send({ cmd: 'calibrate', pressure: p }); };
+
+  const logReading = () => {
+    const val = monitorReading !== '' ? parseFloat(monitorReading) : currentP;
+    if (isNaN(val)) return;
+    setCalLog(prev => [...prev, { target: calPoint, measured: val }]);
+    setMonitorReading('');
+    addEvent(`Registrado: SP ${calPoint} mmHg → Monitor ${val.toFixed(1)} mmHg`);
+  };
+
+  const totalDurMin = () => {
+    const s = protocol.reduce((a, r) => a + (r.rise + r.peak + r.fall + r.interval) * r.repeat, 0);
+    return Math.round(s / 60);
+  };
+
+  const serialOk = typeof navigator !== 'undefined' && !!navigator.serial;
+  const stClass  = 'state-' + (currentState || 'idle').toLowerCase();
+
+  return (
+    <div className="app">
+
+      {/* HEADER */}
+      <header>
+        <div className="logo">
+          <span className="logo-sem">SEM</span>
+          <span className="logo-title">Simulador Fetal</span>
+        </div>
+        <div className="conn-area">
+          {!connected ? (
+            <>
+              <div style={{display:'flex',gap:4}}>
+                {serialOk && (
+                  <button className={`mode-btn ${connMode==='serial'?'active':''}`}
+                    onClick={() => setConnMode('serial')}>USB</button>
+                )}
+                <button className={`mode-btn ${connMode==='wifi'?'active':''}`}
+                  onClick={() => setConnMode('wifi')}>WiFi</button>
+              </div>
+              {connMode === 'wifi' && (
+                <input className="ip-input" value={wifiIP}
+                  onChange={e => setWifiIP(e.target.value)} placeholder="IP ESP32" />
+              )}
+              <button className="btn-connect" onClick={connect}>Conectar</button>
+              {connErr && <span style={{fontSize:11,color:'var(--red)',maxWidth:180}}>{connErr}</span>}
+            </>
+          ) : (
+            <div className="conn-status">
+              <span className="dot-green"></span>
+              <span className="conn-label">{connMode==='serial' ? 'USB Serial' : wifiIP}</span>
+              <button className="btn-ghost-sm" onClick={disconnect}>✕</button>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* PRESIÓN + GRAPH */}
+      <div className="pressure-section">
+        <span className="pressure-value">{currentP.toFixed(1)}</span>
+        <span className="pressure-unit">mmHg</span>
+        <span className={`state-badge ${stClass}`}>{currentState}</span>
+        {currentTarget > 0 && running && (
+          <span className="target-label">→ {currentTarget} mmHg</span>
+        )}
+        {running && (
+          <span style={{fontSize:12,color:'var(--dim)',alignSelf:'flex-end',marginBottom:7}}>
+            grupo {currentCont + 1}/{protocol.length}
+          </span>
+        )}
+      </div>
+
+      <div className="graph-wrap">
+        <PressureGraph data={graphData} state={currentState} target={currentTarget} />
+      </div>
+
+      {/* CONTROLS */}
+      <div className="controls-bar">
+        <button className="btn-action" onClick={doZero} disabled={!connected || running}>
+          Zero
+        </button>
+        {running
+          ? <button className="btn-stop" onClick={doStop}>■ Detener</button>
+          : <button className="btn-run" onClick={doRun} disabled={!connected}>
+              ▶ Ejecutar protocolo
+            </button>
+        }
+        {connected && !running && (
+          <span className="duration-hint">≈ {totalDurMin()} min</span>
+        )}
+        {!connected && (
+          <span className="warn-hint">Conectá el dispositivo para operar</span>
+        )}
+      </div>
+
+      {/* TABS */}
+      <div className="tabs">
+        {[
+          ['protocol', 'Protocolo'],
+          ['cal',      'Calibración'],
+          ['fcf',      'FCF ♥'],
+          ['log',      `Eventos${events.length ? ` (${events.length})` : ''}`],
+        ].map(([k, l]) => (
+          <button key={k} className={`tab ${tab===k?'active':''}`}
+            onClick={() => setTab(k)}>{l}</button>
+        ))}
+      </div>
+
+      {/* CONTENIDO */}
+      <div className="tab-content">
+
+        {tab === 'protocol' && (
+          <div>
+            <p className="section-hint">
+              Cada grupo define contracciones con la misma intensidad. Se ejecutan en orden,
+              repitiendo N veces antes de pasar al siguiente. El perfil de ascenso y descenso
+              usa suavizado sinusoidal (no escalón).
+            </p>
+            <ProtocolEditor protocol={protocol} setProtocol={setProtocol} />
+            <div className="protocol-footer">
+              <button className="btn-ghost" onClick={() => setProtocol(DEFAULT_PROTOCOL)}>
+                Restablecer
+              </button>
+            </div>
+          </div>
+        )}
+
+        {tab === 'cal' && (
+          <div>
+            <p className="section-hint">
+              El dispositivo mantiene la presión seleccionada. Observá la lectura en la pantalla
+              del monitor fetal y registrala. El sistema calcula error y emite veredicto por punto.
+            </p>
+
+            <div className="cal-points">
+              {CAL_POINTS.map(p => (
+                <button key={p}
+                  className={`cal-btn ${calPoint===p && currentState==='CAL' ? 'active' : ''}`}
+                  onClick={() => doCal(p)} disabled={!connected || running}>
+                  {p} mmHg
+                </button>
+              ))}
+              <div className="cal-custom">
+                <input type="number" min={5} max={100} step={5}
+                  value={calPoint} className="cal-custom-input"
+                  onChange={e => setCalPoint(Number(e.target.value))} />
+                <button className="btn-primary"
+                  onClick={() => doCal(calPoint)} disabled={!connected || running}>
+                  Ir
+                </button>
+              </div>
+            </div>
+
+            <div className="cal-register">
+              <h4>Registrar lectura del monitor fetal</h4>
+              <div className="cal-register-row">
+                <span className="dim">
+                  Set point: <strong>{calPoint} mmHg</strong>
+                </span>
+                <span className="dim">
+                  Sensor: <strong>{currentP.toFixed(1)} mmHg</strong>
+                </span>
+                <input type="number" step="0.1"
+                  placeholder={`Lectura monitor (vacío = ${currentP.toFixed(1)})`}
+                  value={monitorReading}
+                  onChange={e => setMonitorReading(e.target.value)}
+                  className="monitor-reading-input" />
+                <button className="btn-primary" onClick={logReading}>Registrar</button>
+              </div>
+            </div>
+
+            <h4>Resultados — curva de linealidad</h4>
+            <CalLog log={calLog} />
+            {calLog.length > 0 && (
+              <div className="cal-actions">
+                <button className="btn-ghost" style={{marginTop:10}}
+                  onClick={() => setCalLog([])}>Limpiar log</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'fcf' && (
+          <div className="fcf-panel">
+            <div className="fcf-info">
+              <div className="fcf-icon">♥</div>
+              <h3>Canal FCF — Frecuencia Cardíaca Fetal</h3>
+              <p>
+                La simulación de FCF sigue funcionando desde la app existente conectada
+                al jack de audio del teléfono. Este canal se integrará al firmware ESP32
+                en la próxima etapa del proyecto.
+              </p>
+              <div className="fcf-values">
+                <div className="fcf-val-group">
+                  <span className="fcf-label">Valores de verificación típicos</span>
+                  <div className="fcf-chips">
+                    {[80, 100, 110, 120, 140, 160, 180].map(b => (
+                      <span key={b} className="fcf-chip">{b} bpm</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="fcf-val-group">
+                  <span className="fcf-label">Rangos clínicos</span>
+                  <div className="fcf-chips">
+                    <span className="fcf-chip" style={{borderColor:'var(--red)',color:'var(--red)'}}>
+                      Bradicardia &lt; 110 bpm
+                    </span>
+                    <span className="fcf-chip" style={{borderColor:'var(--teal)',color:'var(--teal)'}}>
+                      Normal 110–160 bpm
+                    </span>
+                    <span className="fcf-chip" style={{borderColor:'var(--orange)',color:'var(--orange)'}}>
+                      Taquicardia &gt; 160 bpm
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="fcf-note">
+                <span className="note-icon">ℹ</span>
+                <span>
+                  Integración planificada: sincronización de FCF con ciclo de contracciones
+                  (desaceleraciones tipo I, II y III según patrón de Caldeyro-Barcia).
+                  El ESP32 controlará el parlante directamente, eliminando la dependencia
+                  del jack de audio.
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'log' && (
+          <div className="log-panel">
+            {!events.length
+              ? <p className="dim" style={{fontSize:12}}>Sin eventos registrados</p>
+              : events.map((e, i) => (
+                <div key={i} className={`log-entry log-${e.type}`}>
+                  <span className="log-ts">{e.ts}</span>
+                  <span className="log-msg">{e.msg}</span>
+                </div>
+              ))
+            }
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
