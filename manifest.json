@@ -1,0 +1,20 @@
+{
+  "name": "Simulador Fetal — SEM",
+  "short_name": "Sim Fetal",
+  "description": "Control y calibración de simulador neumático de contracciones uterinas para verificación de monitores fetales",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0B1622",
+  "theme_color": "#00D98B",
+  "lang": "es",
+  "categories": ["medical", "utilities"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
