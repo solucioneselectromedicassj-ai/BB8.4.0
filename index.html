@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sim Fetal">
+<meta name="theme-color" content="#00EDA0">
 <title>Simulador Fetal — SEM</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="apple-touch-icon" href="icon.svg">
-<meta name="theme-color" content="#00D98B">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Sim Fetal">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -21,311 +21,262 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:      #0B1622;
-  --panel:   #111E2E;
-  --border:  #1C3048;
-  --teal:    #00D98B;
-  --blue:    #4A9EFF;
-  --orange:  #FF7043;
-  --red:     #FF4757;
-  --gold:    #FFD166;
-  --text:    #D8EEF8;
-  --dim:     #5A7A90;
-  --dimmer:  #2A4560;
+  --bg:      #181D2E;
+  --panel:   #1F2740;
+  --panel2:  #263050;
+  --border:  #2E3D5C;
+  --teal:    #00EDA0;
+  --teal2:   #00C882;
+  --blue:    #5BBBFF;
+  --blue2:   #3A9FE8;
+  --orange:  #FF8255;
+  --red:     #FF5268;
+  --gold:    #FFD966;
+  --text:    #DDE8FF;
+  --dim:     #6A85A8;
+  --dimmer:  #2D3F60;
   --mono:    'JetBrains Mono', monospace;
   --sans:    'Inter', system-ui, sans-serif;
-  --radius:  6px;
+  --r:       6px;
 }
 
-html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; -webkit-tap-highlight-color: transparent; }
 #root { height: 100%; display: flex; flex-direction: column; }
+.app  { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 
-/* ── APP SHELL ──────────────────────────────────────────────────────── */
-.app { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-
-/* ── HEADER ─────────────────────────────────────────────────────────── */
+/* ── HEADER ─────────────────────────────────────────────── */
 header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px;
-  background: var(--panel);
+  padding: 8px 14px; flex-shrink: 0;
+  background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.logo      { display: flex; align-items: baseline; gap: 7px; }
+.logo-sem  { font-family: var(--mono); font-weight: 600; font-size: 12px; color: var(--teal); letter-spacing: 3px; }
+.logo-sub  { font-size: 12px; color: var(--dim); }
+
+.conn-row  { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.mode-btn  { padding: 3px 9px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--dim); cursor: pointer; font-size: 11px; font-family: var(--sans); transition: all .15s; }
+.mode-btn.active { border-color: var(--teal); color: var(--teal); background: #00EDA012; }
+.ip-input  { width: 120px; padding: 3px 7px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 11px; }
+.ip-input:focus { outline: none; border-color: var(--teal); }
+.btn-conn  { padding: 4px 12px; border-radius: 4px; border: 1px solid var(--teal); background: #00EDA015; color: var(--teal); cursor: pointer; font-size: 11px; font-weight: 500; }
+.btn-conn:hover { background: #00EDA025; }
+.dot       { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 7px var(--teal); flex-shrink: 0; }
+.conn-lbl  { font-family: var(--mono); font-size: 11px; color: var(--teal); }
+.btn-xs    { padding: 2px 7px; border-radius: 3px; border: 1px solid var(--border); background: transparent; color: var(--dim); cursor: pointer; font-size: 10px; }
+.conn-err  { font-size: 10px; color: var(--red); max-width: 160px; }
+
+/* ── DUAL READOUT ────────────────────────────────────────── */
+.readout-bar {
+  display: flex; align-items: stretch; gap: 0;
+  padding: 8px 14px; flex-shrink: 0;
   border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
 }
-.logo { display: flex; align-items: baseline; gap: 8px; }
-.logo-sem { font-family: var(--mono); font-weight: 600; font-size: 13px; color: var(--teal); letter-spacing: 2px; }
-.logo-title { font-size: 13px; font-weight: 500; color: var(--dim); }
+.ch {
+  display: flex; align-items: baseline; gap: 6px;
+  padding-right: 20px; border-right: 1px solid var(--border); margin-right: 20px;
+}
+.ch:last-child { border-right: none; margin-right: 0; }
+.ch-val  { font-family: var(--mono); font-size: 38px; font-weight: 600; line-height: 1; }
+.ch-unit { font-family: var(--mono); font-size: 12px; color: var(--dim); align-self: flex-end; padding-bottom: 4px; }
+.ch-lbl  { font-size: 10px; color: var(--dim); align-self: flex-end; padding-bottom: 5px; letter-spacing: .5px; }
+.ch-toco .ch-val { color: var(--teal); }
+.ch-fcf  .ch-val { color: var(--blue); }
 
-.conn-area { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-.mode-btn {
-  padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
-  background: transparent; color: var(--dim); cursor: pointer; font-size: 12px; font-family: var(--sans);
-  transition: all .15s;
+.state-pill {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 20px; font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 1px;
+  align-self: flex-end; margin-bottom: 5px; margin-left: 6px;
 }
-.mode-btn.active { border-color: var(--teal); color: var(--teal); background: #00D98B12; }
-.ip-input {
-  padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border);
-  background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 12px; width: 130px;
-}
-.btn-connect {
-  padding: 5px 14px; border-radius: 4px; border: 1px solid var(--teal);
-  background: #00D98B18; color: var(--teal); cursor: pointer; font-size: 12px;
-  font-weight: 500; transition: background .15s;
-}
-.btn-connect:hover { background: #00D98B28; }
-.conn-status { display: flex; align-items: center; gap: 8px; }
-.dot-green { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 6px var(--teal); flex-shrink: 0; }
-.dot-red   { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
-.conn-label { font-family: var(--mono); font-size: 12px; color: var(--teal); }
-.btn-ghost-sm {
-  padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border);
-  background: transparent; color: var(--dim); cursor: pointer; font-size: 11px;
-}
+.st-idle   { background: var(--dimmer); color: var(--dim); }
+.st-rise   { background: #00EDA018; color: var(--teal); border: 1px solid #00EDA040; }
+.st-peak   { background: #5BBBFF18; color: var(--blue); border: 1px solid #5BBBFF40; }
+.st-fall   { background: #FF825518; color: var(--orange); border: 1px solid #FF825540; }
+.st-inter  { background: var(--dimmer); color: var(--dim); }
+.st-cal    { background: #FFD96618; color: var(--gold); border: 1px solid #FFD96640; }
+.st-zeroing{ background: #FFD96618; color: var(--gold); }
+.st-error  { background: #FF526818; color: var(--red); border: 1px solid #FF526840; }
 
-/* ── PRESSURE READOUT ───────────────────────────────────────────────── */
-.pressure-section {
-  display: flex; align-items: center; gap: 16px;
-  padding: 10px 16px 6px;
-  flex-shrink: 0;
-}
-.pressure-value { font-family: var(--mono); font-size: 42px; font-weight: 600; color: var(--teal); line-height: 1; }
-.pressure-unit  { font-family: var(--mono); font-size: 14px; color: var(--dim); align-self: flex-end; padding-bottom: 6px; }
-.state-badge {
-  padding: 3px 10px; border-radius: 4px; font-family: var(--mono); font-size: 11px; font-weight: 600;
-  letter-spacing: 1px; align-self: flex-end; margin-bottom: 6px;
-}
-.state-idle    { background: #2A4560; color: var(--dim); }
-.state-rise    { background: #00D98B20; color: var(--teal); border: 1px solid #00D98B50; }
-.state-peak    { background: #4A9EFF20; color: var(--blue); border: 1px solid #4A9EFF50; }
-.state-fall    { background: #FF704320; color: var(--orange); border: 1px solid #FF704350; }
-.state-inter   { background: #2A4560; color: var(--dim); }
-.state-cal     { background: #FFD16620; color: var(--gold); border: 1px solid #FFD16650; }
-.state-zeroing { background: #FFD16620; color: var(--gold); }
-.state-error   { background: #FF475720; color: var(--red); border: 1px solid #FF475750; }
-.target-label  { font-family: var(--mono); font-size: 12px; color: var(--blue); align-self: flex-end; margin-bottom: 7px; }
-
-/* ── GRAPH ───────────────────────────────────────────────────────────── */
-.graph-wrap { padding: 0 16px 8px; flex-shrink: 0; }
-canvas { width: 100% !important; height: auto !important; border-radius: var(--radius); display: block; }
-
-/* ── CONTROLS BAR ───────────────────────────────────────────────────── */
-.controls-bar {
+/* FCF audio status */
+.fcf-status {
   display: flex; align-items: center; gap: 8px;
-  padding: 8px 16px;
+  margin-left: auto; align-self: center;
+}
+.fcf-on  { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 8px var(--blue); }
+.fcf-off { width: 8px; height: 8px; border-radius: 50%; background: var(--dimmer); }
+.fcf-lbl { font-size: 11px; color: var(--dim); }
+
+/* ── DUAL GRAPH ──────────────────────────────────────────── */
+.graph-wrap { padding: 0 14px 6px; flex-shrink: 0; }
+canvas { width: 100% !important; height: auto !important; border-radius: var(--r); display: block; }
+
+/* ── CONTROLS BAR ────────────────────────────────────────── */
+.ctrl-bar {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  padding: 7px 14px; flex-shrink: 0;
   background: var(--panel); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  flex-shrink: 0; flex-wrap: wrap;
 }
-.btn-action {
-  padding: 6px 14px; border-radius: var(--radius); border: 1px solid var(--border);
-  background: transparent; color: var(--text); cursor: pointer; font-size: 13px;
-  font-family: var(--sans); transition: all .15s;
-}
+.btn-action { padding: 5px 13px; border-radius: var(--r); border: 1px solid var(--border); background: var(--panel2); color: var(--text); cursor: pointer; font-size: 12px; transition: all .15s; }
 .btn-action:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
 .btn-action:disabled { opacity: .35; cursor: default; }
-.btn-run {
-  padding: 6px 18px; border-radius: var(--radius); border: none;
-  background: var(--teal); color: #0B1622; cursor: pointer; font-size: 13px;
-  font-weight: 600; font-family: var(--sans); transition: opacity .15s;
-}
-.btn-run:hover:not(:disabled) { opacity: .85; }
+.btn-run  { padding: 5px 16px; border-radius: var(--r); border: none; background: var(--teal); color: #111; cursor: pointer; font-size: 12px; font-weight: 600; }
+.btn-run:hover:not(:disabled) { background: var(--teal2); }
 .btn-run:disabled { opacity: .35; cursor: default; }
-.btn-stop {
-  padding: 6px 18px; border-radius: var(--radius); border: none;
-  background: var(--red); color: #fff; cursor: pointer; font-size: 13px;
-  font-weight: 600; font-family: var(--sans);
-}
-.duration-hint { font-size: 12px; color: var(--dim); margin-left: 4px; }
-.warn-hint { font-size: 12px; color: var(--orange); margin-left: 4px; }
+.btn-stop { padding: 5px 16px; border-radius: var(--r); border: none; background: var(--red); color: #fff; cursor: pointer; font-size: 12px; font-weight: 600; }
+.info-txt { font-size: 11px; color: var(--dim); }
+.warn-txt { font-size: 11px; color: var(--orange); }
 
-/* ── TABS ────────────────────────────────────────────────────────────── */
-.tabs {
-  display: flex; gap: 0;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  overflow-x: auto;
-}
-.tab {
-  padding: 9px 16px; background: transparent; border: none;
-  color: var(--dim); cursor: pointer; font-size: 13px; font-family: var(--sans);
-  border-bottom: 2px solid transparent; white-space: nowrap; transition: all .15s;
-}
+/* ── TABS ────────────────────────────────────────────────── */
+.tabs { display: flex; background: var(--panel); border-bottom: 1px solid var(--border); flex-shrink: 0; overflow-x: auto; }
+.tab  { padding: 8px 14px; background: transparent; border: none; color: var(--dim); cursor: pointer; font-size: 12px; font-family: var(--sans); border-bottom: 2px solid transparent; white-space: nowrap; transition: all .15s; }
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--teal); border-bottom-color: var(--teal); }
 
-/* ── TAB CONTENT ─────────────────────────────────────────────────────── */
-.tab-content { flex: 1; overflow-y: auto; padding: 16px; }
-.section-hint { color: var(--dim); font-size: 12px; margin-bottom: 14px; line-height: 1.6; }
+/* ── TAB CONTENT ─────────────────────────────────────────── */
+.tab-body { flex: 1; overflow-y: auto; padding: 14px; }
+.hint { color: var(--dim); font-size: 12px; margin-bottom: 12px; line-height: 1.65; }
 
-/* ── PROTOCOL TABLE ──────────────────────────────────────────────────── */
-.table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+/* ── FCF PANEL ───────────────────────────────────────────── */
+.fcf-panel { display: flex; flex-direction: column; gap: 14px; }
+.fcf-row   { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fcf-big   { font-family: var(--mono); font-size: 28px; font-weight: 600; color: var(--blue); min-width: 80px; }
+.range-wrap { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
+.range-lbl  { font-size: 11px; color: var(--dim); display: flex; justify-content: space-between; }
+input[type=range] {
+  -webkit-appearance: none; width: 100%; height: 4px;
+  background: var(--panel2); border-radius: 2px; outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--blue); cursor: pointer; border: 2px solid var(--bg);
+}
+.btn-audio { padding: 8px 20px; border-radius: var(--r); border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all .2s; }
+.btn-audio-on  { background: var(--blue); color: #111; }
+.btn-audio-off { background: var(--panel2); color: var(--blue); border: 1px solid var(--blue); }
+.fcf-section-title { font-size: 11px; color: var(--dim); font-weight: 500; letter-spacing: .5px; margin-bottom: 6px; }
+
+.bpm-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.bpm-btn { padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-family: var(--mono); font-size: 12px; transition: all .15s; }
+.bpm-btn:hover { border-color: var(--blue); color: var(--blue); }
+.bpm-btn.active { background: #5BBBFF18; border-color: var(--blue); color: var(--blue); }
+
+.fcf-freq-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fcf-freq-note { font-size: 11px; color: var(--dim); line-height: 1.6; }
+
+.var-toggle { display: flex; align-items: center; gap: 8px; }
+.toggle-btn {
+  width: 36px; height: 20px; border-radius: 10px; border: none; cursor: pointer;
+  position: relative; transition: background .2s;
+}
+.toggle-btn.on  { background: var(--blue); }
+.toggle-btn.off { background: var(--dimmer); }
+.toggle-btn::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .2s;
+}
+.toggle-btn.on::after { left: 19px; }
+.var-lbl { font-size: 12px; color: var(--text); }
+
+/* ── PROTOCOL TABLE ──────────────────────────────────────── */
+.tbl-wrap { overflow-x: auto; border-radius: var(--r); border: 1px solid var(--border); }
 table { width: 100%; border-collapse: collapse; }
-thead { background: #0d1a28; }
-th {
-  padding: 8px 10px; text-align: left; font-size: 11px; color: var(--dim);
-  font-weight: 500; white-space: nowrap; border-bottom: 1px solid var(--border);
-}
-td { padding: 4px 6px; border-bottom: 1px solid #0d1a28; }
+thead { background: #141926; }
+th { padding: 7px 8px; text-align: left; font-size: 10px; color: var(--dim); font-weight: 500; white-space: nowrap; border-bottom: 1px solid var(--border); }
+td { padding: 3px 5px; border-bottom: 1px solid #141926; }
 tr:last-child td { border-bottom: none; }
-tr:hover td { background: #0d1e30; }
-.row-num { font-family: var(--mono); font-size: 11px; color: var(--dim); padding-left: 10px; }
-
-td input[type="number"] {
-  width: 68px; padding: 5px 6px; border-radius: 4px;
-  border: 1px solid transparent; background: #0d1a28;
-  color: var(--text); font-family: var(--mono); font-size: 13px;
-  transition: border-color .15s;
-}
-td input[type="number"]:focus { outline: none; border-color: var(--teal); }
-input[type="number"]::-webkit-inner-spin-button { opacity: .4; }
-
-.btn-icon {
-  width: 26px; height: 26px; border-radius: 4px; border: 1px solid var(--border);
-  background: transparent; color: var(--dim); cursor: pointer; font-size: 12px;
-  display: flex; align-items: center; justify-content: center;
-}
+tr:hover td { background: #1a2135; }
+.rn { font-family: var(--mono); font-size: 10px; color: var(--dim); padding-left: 8px; }
+td input[type=number] { width: 62px; padding: 5px 5px; border-radius: 3px; border: 1px solid transparent; background: #141926; color: var(--text); font-family: var(--mono); font-size: 12px; transition: border-color .15s; }
+td input[type=number]:focus { outline: none; border-color: var(--teal); }
+input[type=number]::-webkit-inner-spin-button { opacity: .3; }
+.btn-icon { width: 24px; height: 24px; border-radius: 3px; border: 1px solid var(--border); background: transparent; color: var(--dim); cursor: pointer; font-size: 11px; }
 .btn-icon:hover { border-color: var(--red); color: var(--red); }
-.protocol-footer { margin-top: 10px; display: flex; gap: 8px; }
-.btn-ghost {
-  padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--border);
-  background: transparent; color: var(--dim); cursor: pointer; font-size: 12px;
-  transition: all .15s;
-}
-.btn-ghost:hover { border-color: var(--teal); color: var(--teal); }
+.tbl-footer { margin-top: 8px; display: flex; gap: 7px; }
 
-/* ── CALIBRATION ─────────────────────────────────────────────────────── */
-.cal-points { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
-.cal-btn {
-  padding: 8px 16px; border-radius: var(--radius); border: 1px solid var(--border);
-  background: transparent; color: var(--text); cursor: pointer; font-family: var(--mono);
-  font-size: 13px; transition: all .15s; min-width: 80px;
-}
+/* ── CALIBRATION ─────────────────────────────────────────── */
+.cal-pts { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }
+.cal-btn { padding: 7px 14px; border-radius: var(--r); border: 1px solid var(--border); background: var(--panel2); color: var(--text); cursor: pointer; font-family: var(--mono); font-size: 12px; transition: all .15s; min-width: 76px; }
 .cal-btn:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
-.cal-btn.active { border-color: var(--gold); background: #FFD16618; color: var(--gold); }
+.cal-btn.active { border-color: var(--gold); background: #FFD96615; color: var(--gold); }
 .cal-btn:disabled { opacity: .35; cursor: default; }
 .cal-custom { display: flex; gap: 6px; align-items: center; }
-.cal-custom-input {
-  width: 80px; padding: 7px 8px; border-radius: 4px; border: 1px solid var(--border);
-  background: var(--panel); color: var(--text); font-family: var(--mono); font-size: 13px;
-}
-.btn-primary {
-  padding: 7px 14px; border-radius: var(--radius); border: none;
-  background: var(--blue); color: #fff; cursor: pointer; font-size: 13px;
-  font-weight: 500; transition: opacity .15s;
-}
-.btn-primary:hover { opacity: .85; }
+.num-sm { width: 72px; padding: 6px 7px; border-radius: 4px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-family: var(--mono); font-size: 12px; }
+.num-sm:focus { outline: none; border-color: var(--gold); }
+.btn-primary { padding: 6px 13px; border-radius: var(--r); border: none; background: var(--blue); color: #111; cursor: pointer; font-size: 12px; font-weight: 600; }
+.btn-primary:hover { background: var(--blue2); }
 .btn-primary:disabled { opacity: .35; cursor: default; }
 
-.cal-register {
-  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 14px; margin-bottom: 20px;
-}
-.cal-register h4 { font-size: 12px; font-weight: 500; color: var(--dim); margin-bottom: 12px; }
-.cal-register-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.cal-register-row .dim { font-size: 13px; }
-.cal-register-row strong { color: var(--text); font-family: var(--mono); }
-.monitor-reading-input {
-  flex: 1; min-width: 160px; padding: 7px 10px; border-radius: 4px;
-  border: 1px solid var(--border); background: var(--bg);
-  color: var(--text); font-family: var(--mono); font-size: 13px;
-}
-.monitor-reading-input:focus { outline: none; border-color: var(--blue); }
-h4 { font-size: 12px; font-weight: 600; color: var(--dim); margin-bottom: 10px; letter-spacing: .5px; }
+.cal-reg { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); padding: 12px; margin-bottom: 16px; }
+.cal-reg h4 { font-size: 11px; font-weight: 500; color: var(--dim); margin-bottom: 10px; letter-spacing: .5px; }
+.cal-reg-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cal-reg-row .dim { font-size: 12px; color: var(--dim); }
+.cal-reg-row strong { color: var(--text); font-family: var(--mono); }
+.mon-input { flex: 1; min-width: 140px; padding: 6px 9px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 12px; }
+.mon-input:focus { outline: none; border-color: var(--blue); }
+.sec-title { font-size: 11px; font-weight: 600; color: var(--dim); margin-bottom: 8px; letter-spacing: .5px; }
 
-/* Calibration log table */
-.cal-log { width: 100%; border-collapse: collapse; font-size: 13px; }
-.cal-log th { padding: 7px 10px; text-align: left; font-size: 11px; color: var(--dim); font-weight: 500; border-bottom: 1px solid var(--border); }
-.cal-log td { padding: 8px 10px; border-bottom: 1px solid #0d1a28; font-family: var(--mono); }
-.badge-ok  { display: inline-block; padding: 2px 8px; border-radius: 3px; background: #00D98B18; color: var(--teal); font-size: 11px; }
-.badge-err { display: inline-block; padding: 2px 8px; border-radius: 3px; background: #FF475718; color: var(--red); font-size: 11px; }
-.cal-actions { margin-top: 10px; }
+.cal-log { width: 100%; border-collapse: collapse; font-size: 12px; }
+.cal-log th { padding: 6px 9px; text-align: left; font-size: 10px; color: var(--dim); font-weight: 500; border-bottom: 1px solid var(--border); }
+.cal-log td { padding: 7px 9px; border-bottom: 1px solid #141926; font-family: var(--mono); }
+.ok-badge  { display: inline-block; padding: 1px 7px; border-radius: 3px; background: #00EDA015; color: var(--teal); font-size: 10px; }
+.err-badge { display: inline-block; padding: 1px 7px; border-radius: 3px; background: #FF526815; color: var(--red); font-size: 10px; }
 
-/* ── FCF PANEL ───────────────────────────────────────────────────────── */
-.fcf-panel { max-width: 580px; }
-.fcf-info {
-  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 24px;
-}
-.fcf-icon { font-size: 28px; color: var(--red); margin-bottom: 10px; }
-.fcf-info h3 { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
-.fcf-info p { font-size: 13px; color: var(--dim); line-height: 1.7; margin-bottom: 20px; }
-.fcf-values { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
-.fcf-val-group {}
-.fcf-label { font-size: 11px; color: var(--dim); display: block; margin-bottom: 6px; }
-.fcf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.fcf-chip {
-  padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
-  font-family: var(--mono); font-size: 12px; color: var(--text);
-}
-.fcf-note {
-  display: flex; gap: 10px; align-items: flex-start;
-  background: #4A9EFF10; border: 1px solid #4A9EFF30;
-  border-radius: var(--radius); padding: 12px;
-  font-size: 12px; color: var(--dim); line-height: 1.6;
-}
-.note-icon { color: var(--blue); font-size: 14px; flex-shrink: 0; margin-top: 1px; }
-
-/* ── LOG PANEL ───────────────────────────────────────────────────────── */
-.log-panel { display: flex; flex-direction: column; gap: 4px; }
-.log-entry { display: flex; gap: 12px; align-items: baseline; padding: 5px 8px; border-radius: 4px; }
-.log-entry:hover { background: var(--panel); }
-.log-ts  { font-family: var(--mono); font-size: 11px; color: var(--dimmer); flex-shrink: 0; }
-.log-msg { font-size: 13px; }
+/* ── EVENT LOG ───────────────────────────────────────────── */
+.log-panel { display: flex; flex-direction: column; gap: 3px; }
+.log-e { display: flex; gap: 10px; align-items: baseline; padding: 4px 7px; border-radius: 4px; }
+.log-e:hover { background: var(--panel); }
+.log-ts { font-family: var(--mono); font-size: 10px; color: var(--dimmer); flex-shrink: 0; }
+.log-msg { font-size: 12px; }
 .log-ok   .log-msg { color: var(--teal); }
 .log-warn .log-msg { color: var(--gold); }
 .log-err  .log-msg { color: var(--red); }
 .log-info .log-msg { color: var(--text); }
 
-/* ── GENERIC ─────────────────────────────────────────────────────────── */
+/* ── GENERIC ─────────────────────────────────────────────── */
+.btn-ghost { padding: 5px 11px; border-radius: var(--r); border: 1px solid var(--border); background: transparent; color: var(--dim); cursor: pointer; font-size: 11px; transition: all .15s; }
+.btn-ghost:hover { border-color: var(--teal); color: var(--teal); }
 .dim { color: var(--dim); }
 
-@media (max-width: 500px) {
-  .pressure-value { font-size: 32px; }
-  .controls-bar { gap: 6px; }
-  .btn-run, .btn-stop { padding: 6px 12px; }
+@media (max-width: 480px) {
+  .ch-val { font-size: 28px; }
+  .fcf-big { font-size: 22px; }
 }
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-
 const { useState, useEffect, useRef, useCallback } = React;
 
-// ─── CONSTANTES ──────────────────────────────────────────────────────
-const GRAPH_WINDOW_MS = 5 * 60 * 1000;   // 5 minutos de ventana
-const MAX_MMHG        = 100;
-const MAX_POINTS      = 4000;
+// ─── CONSTANTES ──────────────────────────────────────────
+const WINDOW_MS  = 5 * 60 * 1000;
+const MAX_PTS    = 4000;
+const MAX_MMHG   = 100;
+const FCF_MIN    = 50;
+const FCF_MAX    = 220;
+const CAL_PTS    = [10, 20, 30, 40, 55, 70, 100];
+const BPM_PRESETS = [80, 100, 110, 120, 140, 160, 180];
 
-const CAL_POINTS = [10, 20, 30, 40, 55, 70, 100];
-
-const DEFAULT_PROTOCOL = [
-  { id: 1, mmhg: 10, rise: 20, peak: 20, fall: 20, interval: 60, repeat: 3 },
-  { id: 2, mmhg: 30, rise: 25, peak: 30, fall: 25, interval: 60, repeat: 3 },
-  { id: 3, mmhg: 55, rise: 30, peak: 30, fall: 30, interval: 60, repeat: 3 },
+const DEFAULT_PROTO = [
+  { id:1, mmhg:10, rise:20, peak:20, fall:20, interval:60, repeat:3, fcf:140 },
+  { id:2, mmhg:30, rise:25, peak:30, fall:25, interval:60, repeat:3, fcf:140 },
+  { id:3, mmhg:55, rise:30, peak:30, fall:30, interval:60, repeat:3, fcf:140 },
 ];
 
-// ─── COMM LAYER ───────────────────────────────────────────────────────
-// Abstrae WebSerial (USB) y WebSocket (WiFi)
+// ─── COMM LAYER ──────────────────────────────────────────
 class Comm {
-  constructor(onData, onDisconnect) {
-    this.onData = onData;
-    this.onDisconnect = onDisconnect;
-    this.type = null;
-    this.port = null;
-    this.ws = null;
-    this.reader = null;
-    this.dec = new TextDecoder();
-    this.buf = '';
+  constructor(onData, onDisc) {
+    this.onData = onData; this.onDisc = onDisc;
+    this.type = null; this.port = null; this.ws = null;
+    this.reader = null; this.dec = new TextDecoder(); this.buf = '';
   }
-
   async connectSerial() {
     this.port = await navigator.serial.requestPort();
     await this.port.open({ baudRate: 115200 });
     this.type = 'serial';
-    this._readLoop();
+    this._loop();
   }
-
-  async _readLoop() {
+  async _loop() {
     this.reader = this.port.readable.getReader();
     try {
       while (true) {
@@ -334,427 +285,551 @@ class Comm {
         this.buf += this.dec.decode(value);
         const lines = this.buf.split('\n');
         this.buf = lines.pop();
-        for (const l of lines) {
-          const t = l.trim();
-          if (t) try { this.onData(JSON.parse(t)); } catch(e) {}
-        }
+        for (const l of lines) { const t = l.trim(); if (t) try { this.onData(JSON.parse(t)); } catch(e){} }
       }
-    } catch(e) { this.onDisconnect(); }
+    } catch(e) { this.onDisc(); }
   }
-
   connectWS(ip) {
     return new Promise((res, rej) => {
       this.ws = new WebSocket(`ws://${ip}:81`);
       this.ws.onopen    = () => { this.type = 'ws'; res(); };
-      this.ws.onerror   = () => rej(new Error('No se pudo conectar al ESP32'));
-      this.ws.onclose   = () => this.onDisconnect();
-      this.ws.onmessage = (e) => { try { this.onData(JSON.parse(e.data)); } catch(e) {} };
+      this.ws.onerror   = () => rej(new Error('No se pudo conectar'));
+      this.ws.onclose   = () => this.onDisc();
+      this.ws.onmessage = (e) => { try { this.onData(JSON.parse(e.data)); } catch(e){} };
     });
   }
-
   async send(obj) {
-    const str = JSON.stringify(obj) + '\n';
+    const s = JSON.stringify(obj) + '\n';
     if (this.type === 'serial' && this.port?.writable) {
       const w = this.port.writable.getWriter();
-      await w.write(new TextEncoder().encode(str));
+      await w.write(new TextEncoder().encode(s));
       w.releaseLock();
     } else if (this.type === 'ws' && this.ws?.readyState === 1) {
-      this.ws.send(str);
+      this.ws.send(s);
     }
   }
-
   async disconnect() {
     try { if (this.reader) await this.reader.cancel(); } catch(e) {}
-    try { if (this.port) await this.port.close(); } catch(e) {}
-    try { if (this.ws) this.ws.close(); } catch(e) {}
-    this.type = null; this.port = null; this.ws = null; this.reader = null;
+    try { if (this.port)   await this.port.close();    } catch(e) {}
+    try { if (this.ws)     this.ws.close();             } catch(e) {}
+    this.type = null;
   }
 }
 
-// ─── GRAPH ───────────────────────────────────────────────────────────
-function PressureGraph({ data, state, target }) {
+// ─── FCF AUDIO ENGINE ────────────────────────────────────
+// Genera pulsos por Web Audio API → sale por jack/BT/parlante
+class FCFAudio {
+  constructor() {
+    this.ctx = null;
+    this.bpm = 140;
+    this.freq = 2200;       // Hz del tono del pulso
+    this.duration = 0.055;  // duración del pulso en segundos
+    this.volume = 0.85;
+    this.variability = false;
+    this.nextBeat = 0;
+    this._timer = null;
+    this.running = false;
+  }
+
+  _ensureCtx() {
+    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+  }
+
+  _beat(when, bpmNow) {
+    const osc  = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    // Leve modulación: hace el sonido más "Doppler"
+    const mod  = this.ctx.createOscillator();
+    const modG = this.ctx.createGain();
+    mod.frequency.value = 18;
+    modG.gain.value = 40;
+    mod.connect(modG);
+    modG.connect(osc.frequency);
+    mod.start(when);
+    mod.stop(when + this.duration);
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(this.freq, when);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    gain.gain.setValueAtTime(0, when);
+    gain.gain.linearRampToValueAtTime(this.volume, when + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.001, when + this.duration);
+    osc.start(when);
+    osc.stop(when + this.duration + 0.01);
+  }
+
+  _schedule() {
+    const lookahead = 0.12;
+    while (this.nextBeat < this.ctx.currentTime + lookahead) {
+      // Variabilidad ±5 bpm
+      const bpmNow = this.variability
+        ? this.bpm + (Math.random() - 0.5) * 10
+        : this.bpm;
+      const interval = 60.0 / Math.max(40, bpmNow);
+      this._beat(this.nextBeat, bpmNow);
+      this.nextBeat += interval;
+    }
+  }
+
+  start(bpm) {
+    this._ensureCtx();
+    this.bpm = bpm;
+    this.running = true;
+    this.nextBeat = this.ctx.currentTime + 0.05;
+    this._timer = setInterval(() => this._schedule(), 40);
+  }
+
+  stop() {
+    clearInterval(this._timer);
+    this.running = false;
+  }
+
+  setBpm(bpm) {
+    this.bpm = bpm;
+    if (!this.running) return;
+    // El scheduler toma el nuevo bpm en el próximo ciclo
+  }
+
+  setFreq(hz)   { this.freq = hz; }
+  setVolume(v)  { this.volume = v; }
+  setVar(v)     { this.variability = v; }
+}
+
+const fcfAudio = new FCFAudio();
+
+// ─── DUAL GRAPH ───────────────────────────────────────────
+function DualGraph({ tocoData, fcfData, tocoState, tocoTarget, fcfBpm }) {
   const canvasRef = useRef(null);
-  const animRef   = useRef(null);
-  const dataRef   = useRef(data);
-  useEffect(() => { dataRef.current = data; }, [data]);
+  const tocoRef   = useRef(tocoData);
+  const fcfRef    = useRef(fcfData);
+  const stateRef  = useRef(tocoState);
+  const targetRef = useRef(tocoTarget);
+  const bpmRef    = useRef(fcfBpm);
+  const rafRef    = useRef(null);
+
+  useEffect(() => { tocoRef.current  = tocoData;  }, [tocoData]);
+  useEffect(() => { fcfRef.current   = fcfData;   }, [fcfData]);
+  useEffect(() => { stateRef.current = tocoState; }, [tocoState]);
+  useEffect(() => { targetRef.current= tocoTarget;}, [tocoTarget]);
+  useEffect(() => { bpmRef.current   = fcfBpm;    }, [fcfBpm]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const draw = () => {
-      const pts = dataRef.current;
-      const ctx = canvas.getContext('2d');
+      const toco = tocoRef.current;
+      const fcf  = fcfRef.current;
+      const ctx  = canvas.getContext('2d');
       const W = canvas.width, H = canvas.height;
-      const PL = 52, PR = 16, PT = 18, PB = 32;
-      const GW = W - PL - PR, GH = H - PT - PB;
+
+      // División: 40% FCF arriba, 60% TOCO abajo
+      const FCF_H  = Math.floor(H * 0.40);
+      const TOCO_H = H - FCF_H;
+      const PL = 50, PR = 14, PT = 14, PB = 28;
 
       // Fondo
-      ctx.fillStyle = '#0B1622';
+      ctx.fillStyle = '#181D2E';
       ctx.fillRect(0, 0, W, H);
 
-      // Grid horizontal
-      for (let v = 0; v <= MAX_MMHG; v += 10) {
-        const y = PT + GH - (v / MAX_MMHG) * GH;
-        ctx.strokeStyle = v % 50 === 0 ? '#1C3048' : '#132030';
+      // Divisor entre canales
+      ctx.fillStyle = '#2E3D5C';
+      ctx.fillRect(PL, FCF_H, W - PL - PR, 1);
+
+      const now = Date.now();
+      const winStart = now - WINDOW_MS;
+
+      // ── FCF (canal superior) ────────────────────────────
+      const fcfGH = FCF_H - PT - 8;
+
+      // Grid FCF
+      for (let v = 60; v <= FCF_MAX; v += 20) {
+        const y = PT + fcfGH - ((v - FCF_MIN) / (FCF_MAX - FCF_MIN)) * fcfGH;
+        if (y < PT || y > FCF_H - 6) continue;
+        ctx.strokeStyle = v % 40 === 0 ? '#2A3650' : '#1E2E48';
         ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(PL + GW, y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(W - PR, y); ctx.stroke();
+        if (v % 40 === 0) {
+          ctx.fillStyle = '#6A85A8';
+          ctx.font = '10px JetBrains Mono';
+          ctx.textAlign = 'right';
+          ctx.fillText(v, PL - 5, y + 3.5);
+        }
+      }
+      // Etiqueta canal FCF
+      ctx.fillStyle = '#5BBBFF80';
+      ctx.font = '9px Inter';
+      ctx.textAlign = 'left';
+      ctx.fillText('FCF bpm', PL + 4, PT + 11);
 
-        ctx.fillStyle = v % 20 === 0 ? '#5A7A90' : '#2A4560';
-        ctx.font = `10px JetBrains Mono`;
-        ctx.textAlign = 'right';
-        ctx.fillText(v, PL - 6, y + 3.5);
+      // Línea FCF target
+      const tgtY = PT + fcfGH - ((bpmRef.current - FCF_MIN) / (FCF_MAX - FCF_MIN)) * fcfGH;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = '#5BBBFF50';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(PL, tgtY); ctx.lineTo(W - PR, tgtY); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Curva FCF
+      const fcfVis = fcf.filter(p => p.t >= winStart);
+      if (fcfVis.length > 1) {
+        const xOf = t => PL + ((t - winStart) / WINDOW_MS) * (W - PL - PR);
+        const yOf = v => PT + fcfGH - (Math.max(FCF_MIN, Math.min(FCF_MAX, v)) - FCF_MIN) / (FCF_MAX - FCF_MIN) * fcfGH;
+
+        const grad = ctx.createLinearGradient(0, PT, 0, FCF_H);
+        grad.addColorStop(0, '#5BBBFF22');
+        grad.addColorStop(1, '#5BBBFF00');
+        ctx.beginPath();
+        ctx.moveTo(xOf(fcfVis[0].t), FCF_H - 6);
+        fcfVis.forEach(p => ctx.lineTo(xOf(p.t), yOf(p.v)));
+        ctx.lineTo(xOf(fcfVis[fcfVis.length-1].t), FCF_H - 6);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.strokeStyle = '#5BBBFF';
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        fcfVis.forEach((p, i) => i === 0 ? ctx.moveTo(xOf(p.t), yOf(p.v)) : ctx.lineTo(xOf(p.t), yOf(p.v)));
+        ctx.stroke();
       }
 
-      // Eje Y label
-      ctx.save();
-      ctx.translate(11, PT + GH / 2);
-      ctx.rotate(-Math.PI / 2);
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#2A4560';
-      ctx.font = '10px Inter';
-      ctx.fillText('mmHg', 0, 0);
-      ctx.restore();
+      // ── TOCO (canal inferior) ───────────────────────────
+      const tocoTop = FCF_H + 6;
+      const tocoGH  = H - tocoTop - PB;
 
-      // Eje X
-      ctx.fillStyle = '#2A4560';
-      ctx.font = '10px JetBrains Mono';
-      ctx.textAlign = 'center';
-      const now = pts.length > 0 ? pts[pts.length - 1].t : Date.now();
-      for (let s = 0; s <= 300; s += 60) {
-        const x = PL + (s / 300) * GW;
-        ctx.fillText(`${s}s`, x, H - 8);
+      // Grid TOCO
+      for (let v = 0; v <= MAX_MMHG; v += 10) {
+        const y = tocoTop + tocoGH - (v / MAX_MMHG) * tocoGH;
+        ctx.strokeStyle = v % 50 === 0 ? '#2A3650' : '#1E2E48';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(W - PR, y); ctx.stroke();
+        if (v % 20 === 0) {
+          ctx.fillStyle = '#6A85A8';
+          ctx.font = '10px JetBrains Mono';
+          ctx.textAlign = 'right';
+          ctx.fillText(v, PL - 5, y + 3.5);
+        }
       }
+      // Etiqueta TOCO
+      ctx.fillStyle = '#00EDA080';
+      ctx.font = '9px Inter';
+      ctx.textAlign = 'left';
+      ctx.fillText('TOCO mmHg', PL + 4, tocoTop + 12);
 
-      // Línea target (punteada azul)
-      if (target > 0) {
-        const ty = PT + GH - (Math.min(target, MAX_MMHG) / MAX_MMHG) * GH;
-        ctx.setLineDash([5, 4]);
-        ctx.strokeStyle = '#4A9EFF60';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.moveTo(PL, ty); ctx.lineTo(PL + GW, ty); ctx.stroke();
+      // Línea target TOCO
+      if (targetRef.current > 0) {
+        const ty = tocoTop + tocoGH - (targetRef.current / MAX_MMHG) * tocoGH;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = '#00EDA050';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(PL, ty); ctx.lineTo(W - PR, ty); ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = '#4A9EFF';
-        ctx.font = '10px JetBrains Mono';
-        ctx.textAlign = 'right';
-        ctx.fillText(`${target}`, PL + GW - 4, ty - 4);
       }
 
-      if (pts.length < 2) {
-        // Placeholder cuando no hay datos
-        ctx.fillStyle = '#1C3048';
-        ctx.font = '12px Inter';
-        ctx.textAlign = 'center';
-        ctx.fillText('Esperando datos del dispositivo...', PL + GW / 2, PT + GH / 2);
-        animRef.current = requestAnimationFrame(draw);
-        return;
+      // Curva TOCO
+      const tocoVis = toco.filter(p => p.t >= winStart);
+      if (tocoVis.length > 1) {
+        const xOf = t => PL + ((t - winStart) / WINDOW_MS) * (W - PL - PR);
+        const yOf = p => tocoTop + tocoGH - (Math.min(p, MAX_MMHG) / MAX_MMHG) * tocoGH;
+
+        const grad = ctx.createLinearGradient(0, tocoTop, 0, H);
+        grad.addColorStop(0, '#00EDA028');
+        grad.addColorStop(1, '#00EDA000');
+        ctx.beginPath();
+        ctx.moveTo(xOf(tocoVis[0].t), H - PB);
+        tocoVis.forEach(d => ctx.lineTo(xOf(d.t), yOf(d.p)));
+        ctx.lineTo(xOf(tocoVis[tocoVis.length-1].t), H - PB);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.strokeStyle = '#00EDA0';
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        tocoVis.forEach((d,i) => i===0 ? ctx.moveTo(xOf(d.t), yOf(d.p)) : ctx.lineTo(xOf(d.t), yOf(d.p)));
+        ctx.stroke();
+
+        // Punto actual TOCO
+        const last = tocoVis[tocoVis.length-1];
+        const lx = xOf(last.t), ly = yOf(last.p);
+        ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI*2);
+        ctx.fillStyle = '#00EDA0'; ctx.fill();
+        ctx.beginPath(); ctx.arc(lx, ly, 7, 0, Math.PI*2);
+        ctx.fillStyle = '#00EDA025'; ctx.fill();
       }
 
-      // Curva de presión
-      const winStart = now - GRAPH_WINDOW_MS;
-      const visibles = pts.filter(p => p.t >= winStart);
-      if (visibles.length < 2) { animRef.current = requestAnimationFrame(draw); return; }
+      // Eje X compartido (segundos)
+      ctx.fillStyle = '#2D3F60';
+      ctx.font = '9px JetBrains Mono';
+      ctx.textAlign = 'center';
+      for (let s = 0; s <= 300; s += 60) {
+        const x = PL + (s / 300) * (W - PL - PR);
+        ctx.fillText(s + 's', x, H - 8);
+      }
 
-      const xOf = (t) => PL + ((t - winStart) / GRAPH_WINDOW_MS) * GW;
-      const yOf = (p) => PT + GH - (Math.min(p, MAX_MMHG) / MAX_MMHG) * GH;
-
-      // Relleno degradado
-      const grad = ctx.createLinearGradient(0, PT, 0, PT + GH);
-      grad.addColorStop(0, '#00D98B28');
-      grad.addColorStop(1, '#00D98B00');
-      ctx.beginPath();
-      ctx.moveTo(xOf(visibles[0].t), yOf(visibles[0].p));
-      visibles.forEach(p => ctx.lineTo(xOf(p.t), yOf(p.p)));
-      ctx.lineTo(xOf(visibles[visibles.length - 1].t), PT + GH);
-      ctx.lineTo(xOf(visibles[0].t), PT + GH);
-      ctx.closePath();
-      ctx.fillStyle = grad;
-      ctx.fill();
-
-      // Línea principal
-      ctx.beginPath();
-      ctx.strokeStyle = '#00D98B';
-      ctx.lineWidth = 2;
-      ctx.lineJoin = 'round';
-      visibles.forEach((p, i) => {
-        i === 0 ? ctx.moveTo(xOf(p.t), yOf(p.p)) : ctx.lineTo(xOf(p.t), yOf(p.p));
-      });
-      ctx.stroke();
-
-      // Punto actual (último)
-      const last = visibles[visibles.length - 1];
-      const lx = xOf(last.t), ly = yOf(last.p);
-      ctx.beginPath();
-      ctx.arc(lx, ly, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#00D98B';
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(lx, ly, 7, 0, Math.PI * 2);
-      ctx.fillStyle = '#00D98B30';
-      ctx.fill();
-
-      // Badge de estado
-      const stColors = {
-        IDLE:'#2A4560', RISE:'#00D98B', PEAK:'#4A9EFF',
-        FALL:'#FF7043', CAL:'#FFD166', ERROR:'#FF4757', INTER:'#2A4560'
-      };
-      const sc = stColors[state] || '#2A4560';
-      const stLabel = state || 'IDLE';
-      ctx.font = '600 11px JetBrains Mono';
-      const tw = ctx.measureText(stLabel).width;
-      ctx.fillStyle = sc + '22';
-      ctx.fillRect(PL + GW - tw - 20, PT + 4, tw + 16, 20);
+      // Badge de estado TOCO
+      const stColors = { IDLE:'#2D3F60', RISE:'#00EDA0', PEAK:'#5BBBFF', FALL:'#FF8255', CAL:'#FFD966', ERROR:'#FF5268', INTER:'#2D3F60' };
+      const sc = stColors[stateRef.current] || '#2D3F60';
+      const lbl = stateRef.current || 'IDLE';
+      ctx.font = '600 10px JetBrains Mono';
+      const tw = ctx.measureText(lbl).width;
+      ctx.fillStyle = sc + '20';
+      ctx.fillRect(W - PR - tw - 18, tocoTop + 4, tw + 14, 18);
       ctx.fillStyle = sc;
       ctx.textAlign = 'left';
-      ctx.fillText(stLabel, PL + GW - tw - 12, PT + 17);
+      ctx.fillText(lbl, W - PR - tw - 11, tocoTop + 15);
 
-      animRef.current = requestAnimationFrame(draw);
+      rafRef.current = requestAnimationFrame(draw);
     };
 
-    animRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(animRef.current);
-  }, [state, target]);
+    rafRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
 
   return (
-    <canvas ref={canvasRef} width={1100} height={220}
-      style={{ width:'100%', height:'auto', borderRadius:'6px', display:'block' }} />
+    <canvas ref={canvasRef} width={1100} height={290}
+      style={{ width:'100%', height:'auto', borderRadius:'6px' }} />
   );
 }
 
-// ─── PROTOCOL EDITOR ─────────────────────────────────────────────────
+// ─── PROTOCOL EDITOR ─────────────────────────────────────
 const COLS = [
-  { key:'mmhg',     label:'mmHg',        min:5,  max:100, step:5  },
-  { key:'rise',     label:'Ascenso s',   min:5,  max:120, step:5  },
-  { key:'peak',     label:'Pico s',      min:5,  max:120, step:5  },
-  { key:'fall',     label:'Descenso s',  min:5,  max:120, step:5  },
-  { key:'interval', label:'Intervalo s', min:10, max:300, step:10 },
-  { key:'repeat',   label:'Repetir',     min:1,  max:20,  step:1  },
+  { key:'mmhg',     label:'mmHg',       min:5,  max:100, step:5  },
+  { key:'fcf',      label:'FCF bpm',    min:60, max:200, step:5  },
+  { key:'rise',     label:'Ascenso s',  min:5,  max:120, step:5  },
+  { key:'peak',     label:'Pico s',     min:5,  max:120, step:5  },
+  { key:'fall',     label:'Descenso s', min:5,  max:120, step:5  },
+  { key:'interval', label:'Inter. s',   min:10, max:300, step:10 },
+  { key:'repeat',   label:'N',          min:1,  max:20,  step:1  },
 ];
 
-function ProtocolEditor({ protocol, setProtocol }) {
-  const upd = (id, k, v) =>
-    setProtocol(p => p.map(r => r.id === id ? { ...r, [k]: Number(v) } : r));
-
+function ProtocolEditor({ proto, setProto }) {
+  const upd = (id,k,v) => setProto(p => p.map(r => r.id===id ? {...r,[k]:Number(v)} : r));
   return (
     <div>
-      <div className="table-wrap">
+      <div className="tbl-wrap">
         <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              {COLS.map(c => <th key={c.key}>{c.label}</th>)}
-              <th></th>
-            </tr>
-          </thead>
+          <thead><tr>
+            <th>#</th>
+            {COLS.map(c => <th key={c.key}>{c.label}</th>)}
+            <th></th>
+          </tr></thead>
           <tbody>
-            {protocol.map((row, i) => (
+            {proto.map((row,i) => (
               <tr key={row.id}>
-                <td className="row-num">{i + 1}</td>
+                <td className="rn">{i+1}</td>
                 {COLS.map(c => (
                   <td key={c.key}>
                     <input type="number" min={c.min} max={c.max} step={c.step}
-                      value={row[c.key]}
-                      onChange={e => upd(row.id, c.key, e.target.value)} />
+                      value={row[c.key]} onChange={e => upd(row.id, c.key, e.target.value)}
+                      style={c.key==='fcf' ? {borderColor:'#5BBBFF30'} : {}} />
                   </td>
                 ))}
                 <td>
                   <button className="btn-icon"
-                    onClick={() => setProtocol(p => p.filter(r => r.id !== row.id))}>✕</button>
+                    onClick={() => setProto(p => p.filter(r => r.id!==row.id))}>✕</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <div className="protocol-footer">
+      <div className="tbl-footer">
         <button className="btn-ghost" onClick={() => {
-          const last = protocol[protocol.length - 1] || DEFAULT_PROTOCOL[0];
-          setProtocol(p => [...p, { ...last, id: Date.now() }]);
-        }}>+ Agregar grupo</button>
+          const l = proto[proto.length-1] || DEFAULT_PROTO[0];
+          setProto(p => [...p, {...l, id:Date.now()}]);
+        }}>+ Grupo</button>
       </div>
     </div>
   );
 }
 
-// ─── CAL LOG ─────────────────────────────────────────────────────────
+// ─── CAL LOG ─────────────────────────────────────────────
 function CalLog({ log }) {
-  if (!log.length) return <p className="dim" style={{fontSize:12}}>Sin registros aún</p>;
+  if (!log.length) return <p className="dim" style={{fontSize:11}}>Sin registros</p>;
+  const errs = log.map(r => Math.abs(r.m - r.t));
+  const maxE = Math.max(...errs);
+  const avgE = errs.reduce((a,b)=>a+b,0)/errs.length;
+  const pass = maxE <= 5;
   return (
     <table className="cal-log">
-      <thead>
-        <tr><th>Set point</th><th>Lectura monitor</th><th>Error</th><th>Estado</th></tr>
-      </thead>
+      <thead><tr><th>Set point</th><th>Monitor</th><th>Error</th><th></th></tr></thead>
       <tbody>
-        {log.map((r, i) => {
-          const err = r.measured - r.target;
-          const ok = Math.abs(err) <= 5;
+        {log.map((r,i) => {
+          const e = r.m - r.t; const ok = Math.abs(e) <= 5;
           return (
             <tr key={i}>
-              <td>{r.target} mmHg</td>
-              <td>{r.measured.toFixed(1)} mmHg</td>
-              <td style={{color: ok ? 'var(--teal)' : 'var(--red)'}}>
-                {err > 0 ? '+' : ''}{err.toFixed(1)} mmHg
-              </td>
-              <td><span className={ok ? 'badge-ok' : 'badge-err'}>{ok ? '✓ OK' : '✗ FUERA'}</span></td>
+              <td>{r.t} mmHg</td>
+              <td>{r.m.toFixed(1)} mmHg</td>
+              <td style={{color:ok?'var(--teal)':'var(--red)'}}>{e>0?'+':''}{e.toFixed(1)}</td>
+              <td><span className={ok?'ok-badge':'err-badge'}>{ok?'OK':'FUERA'}</span></td>
             </tr>
           );
         })}
-        {log.length > 1 && (() => {
-          const errs = log.map(r => Math.abs(r.measured - r.target));
-          const max  = Math.max(...errs);
-          const avg  = errs.reduce((a, b) => a + b, 0) / errs.length;
-          const pass = max <= 5;
-          return (
-            <tr style={{background:'#0d1a28'}}>
-              <td colSpan={2} style={{fontSize:11,color:'var(--dim)',paddingTop:10}}>
-                Error máx: <strong style={{color:pass?'var(--teal)':'var(--red)'}}>{max.toFixed(1)} mmHg</strong>
-                &nbsp;·&nbsp; Error promedio: <strong>{avg.toFixed(1)} mmHg</strong>
-              </td>
-              <td colSpan={2} style={{fontSize:11,paddingTop:10}}>
-                <span className={pass ? 'badge-ok' : 'badge-err'} style={{fontSize:12}}>
-                  {pass ? '✓ TRANSDUCTOR APTO' : '✗ REQUIERE AJUSTE'}
-                </span>
-              </td>
-            </tr>
-          );
-        })()}
+        {log.length > 1 && (
+          <tr style={{background:'#141926'}}>
+            <td colSpan={2} style={{fontSize:10,color:'var(--dim)',paddingTop:8}}>
+              Máx: <strong style={{color:pass?'var(--teal)':'var(--red)'}}>{maxE.toFixed(1)}</strong> · Prom: <strong>{avgE.toFixed(1)}</strong> mmHg
+            </td>
+            <td colSpan={2} style={{paddingTop:8}}>
+              <span className={pass?'ok-badge':'err-badge'} style={{fontSize:11}}>
+                {pass?'✓ TRANSDUCTOR APTO':'✗ REQUIERE AJUSTE'}
+              </span>
+            </td>
+          </tr>
+        )}
       </tbody>
     </table>
   );
 }
 
-// ─── MAIN APP ─────────────────────────────────────────────────────────
+// ─── APP ─────────────────────────────────────────────────
 function App() {
-  const [connected,     setConnected]     = useState(false);
-  const [connMode,      setConnMode]      = useState('serial');
-  const [wifiIP,        setWifiIP]        = useState('192.168.4.1');
-  const [connErr,       setConnErr]       = useState('');
+  const [connected,   setConnected]  = useState(false);
+  const [connMode,    setConnMode]   = useState('serial');
+  const [wifiIP,      setWifiIP]     = useState('192.168.4.1');
+  const [connErr,     setConnErr]    = useState('');
 
-  const [graphData,     setGraphData]     = useState([]);
-  const [currentP,      setCurrentP]      = useState(0);
-  const [currentState,  setCurrentState]  = useState('IDLE');
-  const [currentTarget, setCurrentTarget] = useState(0);
-  const [currentCont,   setCurrentCont]   = useState(0);
+  const [tocoData,    setTocoData]   = useState([]);
+  const [fcfData,     setFcfData]    = useState([]);
+  const [currentP,    setCurrentP]   = useState(0);
+  const [curState,    setCurState]   = useState('IDLE');
+  const [curTarget,   setCurTarget]  = useState(0);
 
-  const [protocol,      setProtocol]      = useState(DEFAULT_PROTOCOL);
-  const [running,       setRunning]       = useState(false);
+  // FCF audio
+  const [fcfBpm,      setFcfBpm]     = useState(140);
+  const [fcfAudioOn,  setFcfAudioOn] = useState(false);
+  const [fcfFreq,     setFcfFreq]    = useState(2200);
+  const [fcfVol,      setFcfVol]     = useState(0.85);
+  const [fcfVar,      setFcfVar]     = useState(false);
 
-  const [calPoint,      setCalPoint]      = useState(30);
-  const [calLog,        setCalLog]        = useState([]);
-  const [monitorReading,setMonitorReading]= useState('');
+  const [proto,       setProto]      = useState(DEFAULT_PROTO);
+  const [running,     setRunning]    = useState(false);
 
-  const [events,        setEvents]        = useState([]);
-  const [tab,           setTab]           = useState('protocol');
+  const [calPoint,    setCalPoint]   = useState(30);
+  const [calLog,      setCalLog]     = useState([]);
+  const [monReading,  setMonReading] = useState('');
 
-  const commRef  = useRef(null);
-  const bufRef   = useRef([]);
+  const [events,      setEvents]     = useState([]);
+  const [tab,         setTab]        = useState('protocol');
 
-  const addEvent = (msg, type = 'info') => {
+  const commRef   = useRef(null);
+  const tocoBuf   = useRef([]);
+  const fcfBuf    = useRef([]);
+  const fcfBpmRef = useRef(140);
+
+  useEffect(() => { fcfBpmRef.current = fcfBpm; }, [fcfBpm]);
+
+  // Generar datos FCF sintéticos localmente (se sobrescribe si llegan del dispositivo)
+  useEffect(() => {
+    if (!fcfAudioOn) return;
+    const iv = setInterval(() => {
+      const now = Date.now();
+      const v = fcfBpm + (fcfVar ? (Math.random()-0.5)*10 : 0);
+      fcfBuf.current = [...fcfBuf.current.slice(-MAX_PTS), { t: now, v }];
+      setFcfData([...fcfBuf.current]);
+    }, 200);
+    return () => clearInterval(iv);
+  }, [fcfAudioOn, fcfBpm, fcfVar]);
+
+  const addEv = (msg, type='info') => {
     const ts = new Date().toLocaleTimeString('es-AR', {hour12:false});
-    setEvents(prev => [{ ts, msg, type }, ...prev].slice(0, 80));
+    setEvents(prev => [{ts,msg,type}, ...prev].slice(0, 80));
   };
 
   const onData = useCallback((msg) => {
-    // Telemetría de presión
     if (msg.t !== undefined && msg.p !== undefined) {
-      bufRef.current = [...bufRef.current.slice(-MAX_POINTS), { t: msg.t, p: msg.p }];
-      setGraphData([...bufRef.current]);
+      const now = Date.now();
+      tocoBuf.current = [...tocoBuf.current.slice(-MAX_PTS), {t:now, p:msg.p}];
+      setTocoData([...tocoBuf.current]);
       setCurrentP(msg.p);
-      if (msg.s) setCurrentState(msg.s);
-      if (msg.tgt !== undefined) setCurrentTarget(msg.tgt);
-      if (msg.c  !== undefined) setCurrentCont(msg.c);
+      if (msg.s) setCurState(msg.s);
+      if (msg.tgt !== undefined) setCurTarget(msg.tgt);
       return;
     }
-    // Eventos
     if (msg.event) {
-      switch (msg.event) {
-        case 'ready':
-          addEvent(`Dispositivo listo${msg.data?.wifi ? ` · WiFi ${msg.data.ip}` : ''}`, 'ok');
-          break;
-        case 'zeroed':
-          addEvent(`Zero calibrado (offset: ${msg.data?.offset ?? '?'} mmHg)`, 'ok');
-          break;
-        case 'started':
-          addEvent(`Protocolo iniciado — ${msg.data?.groups} grupos`, 'ok');
-          setRunning(true);
-          break;
-        case 'peak':
-          addEvent(`Contracción ${(msg.data?.c ?? 0) + 1} rep ${(msg.data?.r ?? 0) + 1} — pico`);
-          break;
-        case 'inter':
-          addEvent(`Intervalo entre contracciones`);
-          break;
-        case 'stopped':
-          addEvent('Protocolo detenido', 'warn');
-          setRunning(false);
-          break;
-        case 'done':
-          addEvent('Protocolo completado ✓', 'ok');
-          setRunning(false);
-          break;
-        case 'calibrating':
-          addEvent(`Calibrando → ${msg.data?.target} mmHg`, 'ok');
-          break;
-        default:
-          addEvent(msg.event);
+      switch(msg.event) {
+        case 'ready':   addEv(`Dispositivo listo${msg.data?.wifi?` · ${msg.data.ip}`:''}`, 'ok'); break;
+        case 'zeroed':  addEv('Zero calibrado', 'ok'); break;
+        case 'started': addEv(`Protocolo → ${msg.data?.groups} grupos`, 'ok'); setRunning(true); break;
+        case 'done':    addEv('Protocolo completado ✓', 'ok'); setRunning(false); break;
+        case 'stopped': addEv('Detenido', 'warn'); setRunning(false); break;
+        case 'peak':    addEv(`Pico — grupo ${(msg.data?.c??0)+1} rep ${(msg.data?.r??0)+1}`); break;
+        default:        addEv(msg.event);
       }
     }
   }, []);
 
-  const onDisconnect = useCallback(() => {
-    setConnected(false);
-    setRunning(false);
-    setCurrentState('IDLE');
-    addEvent('Dispositivo desconectado', 'warn');
+  const onDisc = useCallback(() => {
+    setConnected(false); setRunning(false); setCurState('IDLE');
+    addEv('Desconectado', 'warn');
   }, []);
 
   const connect = async () => {
     setConnErr('');
-    const comm = new Comm(onData, onDisconnect);
+    const comm = new Comm(onData, onDisc);
     commRef.current = comm;
     try {
       if (connMode === 'serial') {
-        if (!navigator.serial) throw new Error('WebSerial no disponible. Usá Chrome en escritorio o Android.');
+        if (!navigator.serial) throw new Error('Requiere Chrome con cable USB');
         await comm.connectSerial();
       } else {
         await comm.connectWS(wifiIP);
       }
       setConnected(true);
-      addEvent(`Conectado por ${connMode === 'serial' ? 'USB' : 'WiFi'}`, 'ok');
-    } catch (e) {
-      setConnErr(e.message);
-      addEvent(e.message, 'err');
-    }
+      addEv(`Conectado (${connMode==='serial'?'USB':wifiIP})`, 'ok');
+    } catch(e) { setConnErr(e.message); addEv(e.message, 'err'); }
   };
 
   const disconnect = async () => {
     await commRef.current?.disconnect();
-    setConnected(false);
-    setRunning(false);
+    setConnected(false); setRunning(false);
   };
 
-  const send = (obj) => commRef.current?.send(obj);
+  const send = obj => commRef.current?.send(obj);
 
-  const doZero  = () => { send({ cmd: 'zero' }); addEvent('Zeroing — esperá 4 segundos'); };
-  const doStop  = () => { send({ cmd: 'stop' }); };
-  const doRun   = () => { send({ cmd: 'run', protocol }); };
-  const doCal   = (p) => { setCalPoint(p); send({ cmd: 'calibrate', pressure: p }); };
+  // FCF audio control
+  const toggleFCFAudio = () => {
+    if (fcfAudioOn) {
+      fcfAudio.stop();
+      setFcfAudioOn(false);
+      addEv('FCF audio detenido', 'warn');
+    } else {
+      fcfAudio.setFreq(fcfFreq);
+      fcfAudio.setVolume(fcfVol);
+      fcfAudio.setVar(fcfVar);
+      fcfAudio.start(fcfBpm);
+      setFcfAudioOn(true);
+      addEv(`FCF audio iniciado — ${fcfBpm} bpm @ ${fcfFreq} Hz`, 'ok');
+    }
+  };
 
+  const changeBpm = (v) => {
+    setFcfBpm(v);
+    fcfAudio.setBpm(v);
+  };
+
+  const doZero = () => { send({cmd:'zero'}); addEv('Zeroing (4s)...'); };
+  const doStop = () => { send({cmd:'stop'}); };
+  const doRun  = () => { send({cmd:'run', protocol:proto}); };
+  const doCal  = (p) => { setCalPoint(p); send({cmd:'calibrate', pressure:p}); addEv(`Calibrando → ${p} mmHg`); };
   const logReading = () => {
-    const val = monitorReading !== '' ? parseFloat(monitorReading) : currentP;
-    if (isNaN(val)) return;
-    setCalLog(prev => [...prev, { target: calPoint, measured: val }]);
-    setMonitorReading('');
-    addEvent(`Registrado: SP ${calPoint} mmHg → Monitor ${val.toFixed(1)} mmHg`);
+    const v = monReading!=='' ? parseFloat(monReading) : currentP;
+    if (isNaN(v)) return;
+    setCalLog(prev => [...prev, {t:calPoint, m:v}]);
+    setMonReading('');
+    addEv(`Registrado: ${calPoint} → ${v.toFixed(1)} mmHg`);
   };
 
-  const totalDurMin = () => {
-    const s = protocol.reduce((a, r) => a + (r.rise + r.peak + r.fall + r.interval) * r.repeat, 0);
-    return Math.round(s / 60);
-  };
-
+  const totalMin = () => Math.round(proto.reduce((a,r) => a+(r.rise+r.peak+r.fall+r.interval)*r.repeat, 0)/60);
   const serialOk = typeof navigator !== 'undefined' && !!navigator.serial;
-  const stClass  = 'state-' + (currentState || 'idle').toLowerCase();
+  const stClass  = 'st-' + (curState||'idle').toLowerCase();
 
   return (
     <div className="app">
@@ -763,214 +838,227 @@ function App() {
       <header>
         <div className="logo">
           <span className="logo-sem">SEM</span>
-          <span className="logo-title">Simulador Fetal</span>
+          <span className="logo-sub">Simulador Fetal</span>
         </div>
-        <div className="conn-area">
-          {!connected ? (
-            <>
-              <div style={{display:'flex',gap:4}}>
-                {serialOk && (
-                  <button className={`mode-btn ${connMode==='serial'?'active':''}`}
-                    onClick={() => setConnMode('serial')}>USB</button>
-                )}
-                <button className={`mode-btn ${connMode==='wifi'?'active':''}`}
-                  onClick={() => setConnMode('wifi')}>WiFi</button>
-              </div>
-              {connMode === 'wifi' && (
-                <input className="ip-input" value={wifiIP}
-                  onChange={e => setWifiIP(e.target.value)} placeholder="IP ESP32" />
-              )}
-              <button className="btn-connect" onClick={connect}>Conectar</button>
-              {connErr && <span style={{fontSize:11,color:'var(--red)',maxWidth:180}}>{connErr}</span>}
-            </>
-          ) : (
-            <div className="conn-status">
-              <span className="dot-green"></span>
-              <span className="conn-label">{connMode==='serial' ? 'USB Serial' : wifiIP}</span>
-              <button className="btn-ghost-sm" onClick={disconnect}>✕</button>
+        <div className="conn-row">
+          {!connected ? (<>
+            <div style={{display:'flex',gap:4}}>
+              {serialOk && <button className={`mode-btn ${connMode==='serial'?'active':''}`} onClick={()=>setConnMode('serial')}>USB</button>}
+              <button className={`mode-btn ${connMode==='wifi'?'active':''}`} onClick={()=>setConnMode('wifi')}>WiFi</button>
+            </div>
+            {connMode==='wifi' && <input className="ip-input" value={wifiIP} onChange={e=>setWifiIP(e.target.value)} placeholder="IP ESP32"/>}
+            <button className="btn-conn" onClick={connect}>Conectar</button>
+            {connErr && <span className="conn-err">{connErr}</span>}
+          </>) : (
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <span className="dot"></span>
+              <span className="conn-lbl">{connMode==='serial'?'USB':wifiIP}</span>
+              <button className="btn-xs" onClick={disconnect}>✕</button>
             </div>
           )}
         </div>
       </header>
 
-      {/* PRESIÓN + GRAPH */}
-      <div className="pressure-section">
-        <span className="pressure-value">{currentP.toFixed(1)}</span>
-        <span className="pressure-unit">mmHg</span>
-        <span className={`state-badge ${stClass}`}>{currentState}</span>
-        {currentTarget > 0 && running && (
-          <span className="target-label">→ {currentTarget} mmHg</span>
-        )}
-        {running && (
-          <span style={{fontSize:12,color:'var(--dim)',alignSelf:'flex-end',marginBottom:7}}>
-            grupo {currentCont + 1}/{protocol.length}
-          </span>
-        )}
+      {/* DUAL READOUT */}
+      <div className="readout-bar">
+        <div className="ch ch-toco">
+          <span className="ch-val">{currentP.toFixed(1)}</span>
+          <span className="ch-unit">mmHg</span>
+          <span className="ch-lbl">TOCO</span>
+          <span className={`state-pill ${stClass}`}>{curState}</span>
+        </div>
+        <div className="ch ch-fcf">
+          <span className="ch-val">{fcfBpm}</span>
+          <span className="ch-unit">bpm</span>
+          <span className="ch-lbl">FCF</span>
+        </div>
+        <div className="fcf-status" style={{marginLeft:'auto'}}>
+          <span className={fcfAudioOn ? 'fcf-on' : 'fcf-off'}></span>
+          <span className="fcf-lbl">Audio {fcfAudioOn ? 'ON' : 'OFF'}</span>
+        </div>
       </div>
 
+      {/* GRÁFICO DUAL */}
       <div className="graph-wrap">
-        <PressureGraph data={graphData} state={currentState} target={currentTarget} />
+        <DualGraph
+          tocoData={tocoData} fcfData={fcfData}
+          tocoState={curState} tocoTarget={curTarget}
+          fcfBpm={fcfBpm} />
       </div>
 
       {/* CONTROLS */}
-      <div className="controls-bar">
-        <button className="btn-action" onClick={doZero} disabled={!connected || running}>
-          Zero
-        </button>
+      <div className="ctrl-bar">
+        <button className="btn-action" onClick={doZero} disabled={!connected||running}>Zero</button>
         {running
           ? <button className="btn-stop" onClick={doStop}>■ Detener</button>
-          : <button className="btn-run" onClick={doRun} disabled={!connected}>
-              ▶ Ejecutar protocolo
-            </button>
-        }
-        {connected && !running && (
-          <span className="duration-hint">≈ {totalDurMin()} min</span>
-        )}
-        {!connected && (
-          <span className="warn-hint">Conectá el dispositivo para operar</span>
-        )}
+          : <button className="btn-run" onClick={doRun} disabled={!connected}>▶ Ejecutar</button>}
+        <button
+          className={`btn-action ${fcfAudioOn ? '' : ''}`}
+          style={fcfAudioOn ? {borderColor:'var(--blue)',color:'var(--blue)'} : {}}
+          onClick={toggleFCFAudio}>
+          {fcfAudioOn ? '⏸ FCF audio' : '♥ FCF audio'}
+        </button>
+        {connected && !running && <span className="info-txt">≈ {totalMin()} min</span>}
+        {!connected && <span className="warn-txt">Conectá el ESP32 para TOCO</span>}
       </div>
 
       {/* TABS */}
       <div className="tabs">
-        {[
-          ['protocol', 'Protocolo'],
-          ['cal',      'Calibración'],
-          ['fcf',      'FCF ♥'],
-          ['log',      `Eventos${events.length ? ` (${events.length})` : ''}`],
-        ].map(([k, l]) => (
-          <button key={k} className={`tab ${tab===k?'active':''}`}
-            onClick={() => setTab(k)}>{l}</button>
-        ))}
+        {[['protocol','Protocolo'],['fcf','FCF ♥'],['cal','Calibración'],['log',`Eventos${events.length?` (${events.length})`:''}`]]
+          .map(([k,l]) => <button key={k} className={`tab ${tab===k?'active':''}`} onClick={()=>setTab(k)}>{l}</button>)}
       </div>
 
       {/* CONTENIDO */}
-      <div className="tab-content">
+      <div className="tab-body">
 
-        {tab === 'protocol' && (
+        {tab==='protocol' && (
           <div>
-            <p className="section-hint">
-              Cada grupo define contracciones con la misma intensidad. Se ejecutan en orden,
-              repitiendo N veces antes de pasar al siguiente. El perfil de ascenso y descenso
-              usa suavizado sinusoidal (no escalón).
+            <p className="hint">
+              La columna <strong style={{color:'var(--blue)'}}>FCF bpm</strong> define la frecuencia cardíaca fetal
+              para cada grupo. Durante la ejecución podés sobreescribirla manualmente desde el tab FCF.
             </p>
-            <ProtocolEditor protocol={protocol} setProtocol={setProtocol} />
-            <div className="protocol-footer">
-              <button className="btn-ghost" onClick={() => setProtocol(DEFAULT_PROTOCOL)}>
-                Restablecer
+            <ProtocolEditor proto={proto} setProto={setProto} />
+            <div className="tbl-footer" style={{marginTop:8}}>
+              <button className="btn-ghost" onClick={()=>setProto(DEFAULT_PROTO)}>Restablecer</button>
+            </div>
+          </div>
+        )}
+
+        {tab==='fcf' && (
+          <div className="fcf-panel">
+            <p className="hint">
+              El audio FCF se genera directamente en el browser y sale por la salida de audio del dispositivo
+              (jack, Bluetooth, o parlante según configuración del sistema). Conectá el jack al amplificador
+              del parlante frente al transductor Doppler.
+            </p>
+
+            {/* BPM control */}
+            <div>
+              <div className="fcf-section-title">FRECUENCIA CARDÍACA FETAL</div>
+              <div className="fcf-row" style={{marginBottom:12}}>
+                <span className="fcf-big">{fcfBpm} bpm</span>
+                <div className="range-wrap">
+                  <div className="range-lbl">
+                    <span>{FCF_MIN}</span>
+                    <span style={{color:'var(--blue)'}}>← ajustá →</span>
+                    <span>{FCF_MAX}</span>
+                  </div>
+                  <input type="range" min={FCF_MIN} max={FCF_MAX} step={1}
+                    value={fcfBpm} onChange={e=>changeBpm(Number(e.target.value))}
+                    style={{'--thumb-color':'var(--blue)'}} />
+                </div>
+              </div>
+
+              <div className="bpm-presets" style={{marginBottom:14}}>
+                {BPM_PRESETS.map(b => (
+                  <button key={b} className={`bpm-btn ${fcfBpm===b?'active':''}`}
+                    onClick={()=>changeBpm(b)}>{b}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Rangos clínicos */}
+            <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>
+              {[
+                {label:'Bradicardia',range:'< 110',bpm:90,color:'var(--red)'},
+                {label:'Normal',range:'110–160',bpm:140,color:'var(--teal)'},
+                {label:'Taquicardia',range:'> 160',bpm:175,color:'var(--orange)'},
+              ].map(r => (
+                <button key={r.label} onClick={()=>changeBpm(r.bpm)}
+                  style={{padding:'6px 12px',borderRadius:'var(--r)',border:`1px solid ${r.color}40`,
+                    background:`${r.color}10`,color:r.color,cursor:'pointer',fontSize:11}}>
+                  {r.label} {r.range} bpm
+                </button>
+              ))}
+            </div>
+
+            {/* Audio config */}
+            <div>
+              <div className="fcf-section-title">CONFIGURACIÓN DE AUDIO</div>
+
+              <div className="fcf-freq-row" style={{marginBottom:10}}>
+                <div className="range-wrap" style={{maxWidth:220}}>
+                  <div className="range-lbl">
+                    <span>Frecuencia tono</span>
+                    <span style={{color:'var(--blue)'}}>{fcfFreq} Hz</span>
+                  </div>
+                  <input type="range" min={800} max={4000} step={100}
+                    value={fcfFreq} onChange={e=>{ const v=Number(e.target.value); setFcfFreq(v); fcfAudio.setFreq(v); }} />
+                </div>
+                <div className="fcf-freq-note">
+                  Ajustá hasta que el transductor<br/>Doppler detecte la señal.
+                </div>
+              </div>
+
+              <div style={{marginBottom:12}}>
+                <div className="range-wrap" style={{maxWidth:220}}>
+                  <div className="range-lbl">
+                    <span>Volumen</span>
+                    <span style={{color:'var(--blue)'}}>{Math.round(fcfVol*100)}%</span>
+                  </div>
+                  <input type="range" min={0} max={1} step={0.05}
+                    value={fcfVol} onChange={e=>{ const v=Number(e.target.value); setFcfVol(v); fcfAudio.setVolume(v); }} />
+                </div>
+              </div>
+
+              <div className="var-toggle" style={{marginBottom:16}}>
+                <button className={`toggle-btn ${fcfVar?'on':'off'}`}
+                  onClick={()=>{ const v=!fcfVar; setFcfVar(v); fcfAudio.setVar(v); }}></button>
+                <span className="var-lbl">Variabilidad ±5 bpm</span>
+              </div>
+
+              <button
+                className={`btn-audio ${fcfAudioOn?'btn-audio-on':'btn-audio-off'}`}
+                onClick={toggleFCFAudio}>
+                {fcfAudioOn ? '⏸  Detener audio FCF' : '▶  Iniciar audio FCF'}
               </button>
             </div>
           </div>
         )}
 
-        {tab === 'cal' && (
+        {tab==='cal' && (
           <div>
-            <p className="section-hint">
-              El dispositivo mantiene la presión seleccionada. Observá la lectura en la pantalla
-              del monitor fetal y registrala. El sistema calcula error y emite veredicto por punto.
+            <p className="hint">
+              El dispositivo mantiene la presión seleccionada. Registrá la lectura del monitor fetal
+              en cada punto para construir la curva de linealidad del transductor.
             </p>
-
-            <div className="cal-points">
-              {CAL_POINTS.map(p => (
-                <button key={p}
-                  className={`cal-btn ${calPoint===p && currentState==='CAL' ? 'active' : ''}`}
-                  onClick={() => doCal(p)} disabled={!connected || running}>
+            <div className="cal-pts">
+              {CAL_PTS.map(p => (
+                <button key={p} className={`cal-btn ${calPoint===p&&curState==='CAL'?'active':''}`}
+                  onClick={()=>doCal(p)} disabled={!connected||running}>
                   {p} mmHg
                 </button>
               ))}
               <div className="cal-custom">
-                <input type="number" min={5} max={100} step={5}
-                  value={calPoint} className="cal-custom-input"
-                  onChange={e => setCalPoint(Number(e.target.value))} />
-                <button className="btn-primary"
-                  onClick={() => doCal(calPoint)} disabled={!connected || running}>
-                  Ir
-                </button>
+                <input type="number" min={5} max={100} step={5} value={calPoint}
+                  className="num-sm" onChange={e=>setCalPoint(Number(e.target.value))} />
+                <button className="btn-primary" onClick={()=>doCal(calPoint)} disabled={!connected||running}>Ir</button>
               </div>
             </div>
-
-            <div className="cal-register">
-              <h4>Registrar lectura del monitor fetal</h4>
-              <div className="cal-register-row">
-                <span className="dim">
-                  Set point: <strong>{calPoint} mmHg</strong>
-                </span>
-                <span className="dim">
-                  Sensor: <strong>{currentP.toFixed(1)} mmHg</strong>
-                </span>
-                <input type="number" step="0.1"
-                  placeholder={`Lectura monitor (vacío = ${currentP.toFixed(1)})`}
-                  value={monitorReading}
-                  onChange={e => setMonitorReading(e.target.value)}
-                  className="monitor-reading-input" />
+            <div className="cal-reg">
+              <h4>REGISTRAR LECTURA DEL MONITOR</h4>
+              <div className="cal-reg-row">
+                <span className="dim">Set point: <strong>{calPoint} mmHg</strong></span>
+                <span className="dim">Sensor: <strong>{currentP.toFixed(1)} mmHg</strong></span>
+                <input type="number" step="0.1" placeholder={`Lectura monitor (vacío = ${currentP.toFixed(1)})`}
+                  value={monReading} onChange={e=>setMonReading(e.target.value)} className="mon-input" />
                 <button className="btn-primary" onClick={logReading}>Registrar</button>
               </div>
             </div>
-
-            <h4>Resultados — curva de linealidad</h4>
+            <div className="sec-title">CURVA DE LINEALIDAD</div>
             <CalLog log={calLog} />
-            {calLog.length > 0 && (
-              <div className="cal-actions">
-                <button className="btn-ghost" style={{marginTop:10}}
-                  onClick={() => setCalLog([])}>Limpiar log</button>
-              </div>
+            {calLog.length>0 && (
+              <button className="btn-ghost" style={{marginTop:10}} onClick={()=>setCalLog([])}>Limpiar</button>
             )}
           </div>
         )}
 
-        {tab === 'fcf' && (
-          <div className="fcf-panel">
-            <div className="fcf-info">
-              <div className="fcf-icon">♥</div>
-              <h3>Canal FCF — Frecuencia Cardíaca Fetal</h3>
-              <p>
-                La simulación de FCF sigue funcionando desde la app existente conectada
-                al jack de audio del teléfono. Este canal se integrará al firmware ESP32
-                en la próxima etapa del proyecto.
-              </p>
-              <div className="fcf-values">
-                <div className="fcf-val-group">
-                  <span className="fcf-label">Valores de verificación típicos</span>
-                  <div className="fcf-chips">
-                    {[80, 100, 110, 120, 140, 160, 180].map(b => (
-                      <span key={b} className="fcf-chip">{b} bpm</span>
-                    ))}
-                  </div>
-                </div>
-                <div className="fcf-val-group">
-                  <span className="fcf-label">Rangos clínicos</span>
-                  <div className="fcf-chips">
-                    <span className="fcf-chip" style={{borderColor:'var(--red)',color:'var(--red)'}}>
-                      Bradicardia &lt; 110 bpm
-                    </span>
-                    <span className="fcf-chip" style={{borderColor:'var(--teal)',color:'var(--teal)'}}>
-                      Normal 110–160 bpm
-                    </span>
-                    <span className="fcf-chip" style={{borderColor:'var(--orange)',color:'var(--orange)'}}>
-                      Taquicardia &gt; 160 bpm
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="fcf-note">
-                <span className="note-icon">ℹ</span>
-                <span>
-                  Integración planificada: sincronización de FCF con ciclo de contracciones
-                  (desaceleraciones tipo I, II y III según patrón de Caldeyro-Barcia).
-                  El ESP32 controlará el parlante directamente, eliminando la dependencia
-                  del jack de audio.
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {tab === 'log' && (
+        {tab==='log' && (
           <div className="log-panel">
             {!events.length
-              ? <p className="dim" style={{fontSize:12}}>Sin eventos registrados</p>
-              : events.map((e, i) => (
-                <div key={i} className={`log-entry log-${e.type}`}>
+              ? <p className="dim" style={{fontSize:11}}>Sin eventos</p>
+              : events.map((e,i) => (
+                <div key={i} className={`log-e log-${e.type}`}>
                   <span className="log-ts">{e.ts}</span>
                   <span className="log-msg">{e.msg}</span>
                 </div>
