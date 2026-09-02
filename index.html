@@ -318,14 +318,19 @@ class Comm {
 
 // ─── FCF AUDIO ENGINE ────────────────────────────────────
 // Genera pulsos por Web Audio API → sale por jack/BT/parlante
+//
+// Modos de forma de onda:
+//   'cardiac'  → lub-dub con osciladores graves (suena como latido real)
+//   'doppler'  → whoosh con barrido de frecuencia (más parecido a CTG real)
+//   'mixed'    → doppler + grave combinados (mejor para transductor + oído)
 class FCFAudio {
   constructor() {
     this.ctx = null;
     this.bpm = 140;
-    this.freq = 2200;       // Hz del tono del pulso
-    this.duration = 0.055;  // duración del pulso en segundos
+    this.freq = 2200;       // Hz base para modo doppler
     this.volume = 0.85;
     this.variability = false;
+    this.waveform = 'doppler'; // 'cardiac' | 'doppler' | 'mixed'
     this.nextBeat = 0;
     this._timer = null;
     this.running = false;
@@ -336,40 +341,68 @@ class FCFAudio {
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
 
-  _beat(when, bpmNow) {
-    const osc  = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    // Leve modulación: hace el sonido más "Doppler"
-    const mod  = this.ctx.createOscillator();
-    const modG = this.ctx.createGain();
-    mod.frequency.value = 18;
-    modG.gain.value = 40;
-    mod.connect(modG);
-    modG.connect(osc.frequency);
-    mod.start(when);
-    mod.stop(when + this.duration);
+  // Componente grave tipo "thump" — da carácter de latido real
+  _thump(when, freqBase, vol, durEnv) {
+    const osc = this.ctx.createOscillator();
+    const g   = this.ctx.createGain();
+    osc.type  = 'sine';
+    // Barrido descendente de frecuencia: da el "punch" del latido
+    osc.frequency.setValueAtTime(freqBase, when);
+    osc.frequency.exponentialRampToValueAtTime(freqBase * 0.45, when + durEnv);
+    osc.connect(g); g.connect(this.ctx.destination);
+    g.gain.setValueAtTime(0, when);
+    g.gain.linearRampToValueAtTime(vol, when + 0.010);
+    g.gain.exponentialRampToValueAtTime(0.001, when + durEnv);
+    osc.start(when); osc.stop(when + durEnv + 0.01);
+  }
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(this.freq, when);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
+  // Componente HF con sweep — da el "whoosh" del Doppler + estimula transductor
+  _whoosh(when, freqStart, vol, durEnv) {
+    const osc = this.ctx.createOscillator();
+    const g   = this.ctx.createGain();
+    osc.type  = 'sine';
+    osc.frequency.setValueAtTime(freqStart, when);
+    osc.frequency.exponentialRampToValueAtTime(freqStart * 0.65, when + durEnv);
+    osc.connect(g); g.connect(this.ctx.destination);
+    g.gain.setValueAtTime(0, when);
+    g.gain.linearRampToValueAtTime(vol, when + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.001, when + durEnv);
+    osc.start(when); osc.stop(when + durEnv + 0.01);
+  }
 
-    gain.gain.setValueAtTime(0, when);
-    gain.gain.linearRampToValueAtTime(this.volume, when + 0.008);
-    gain.gain.exponentialRampToValueAtTime(0.001, when + this.duration);
-    osc.start(when);
-    osc.stop(when + this.duration + 0.01);
+  _beat(when) {
+    const v = this.volume;
+    const f = this.freq;
+
+    if (this.waveform === 'cardiac') {
+      // LUB: thump grave ~90Hz, 110ms — el "primer ruido cardíaco"
+      this._thump(when,          90,      v,      0.11);
+      // DUB: thump más agudo ~130Hz, 70ms — el "segundo ruido cardíaco", 180ms después
+      this._thump(when + 0.18,   130,     v*0.70, 0.07);
+
+    } else if (this.waveform === 'doppler') {
+      // Un whoosh HF con barrido — clásico del monitor fetal Doppler
+      // Doble pulso (simula apertura + cierre de válvulas)
+      this._whoosh(when,         f,       v,      0.09);
+      this._whoosh(when + 0.16,  f*0.85,  v*0.60, 0.06);
+
+    } else { // 'mixed'
+      // Grave (suena como latido) + HF (estimula transductor)
+      this._thump(when,          80,      v,      0.12);   // lub grave
+      this._whoosh(when,         f,       v*0.55, 0.07);   // hf simultáneo
+      this._thump(when + 0.18,   120,     v*0.65, 0.07);   // dub
+      this._whoosh(when + 0.18,  f*0.85,  v*0.30, 0.05);   // hf dub
+    }
   }
 
   _schedule() {
-    const lookahead = 0.12;
+    const lookahead = 0.14;
     while (this.nextBeat < this.ctx.currentTime + lookahead) {
-      // Variabilidad ±5 bpm
       const bpmNow = this.variability
         ? this.bpm + (Math.random() - 0.5) * 10
         : this.bpm;
       const interval = 60.0 / Math.max(40, bpmNow);
-      this._beat(this.nextBeat, bpmNow);
+      this._beat(this.nextBeat);
       this.nextBeat += interval;
     }
   }
@@ -387,15 +420,11 @@ class FCFAudio {
     this.running = false;
   }
 
-  setBpm(bpm) {
-    this.bpm = bpm;
-    if (!this.running) return;
-    // El scheduler toma el nuevo bpm en el próximo ciclo
-  }
-
-  setFreq(hz)   { this.freq = hz; }
-  setVolume(v)  { this.volume = v; }
-  setVar(v)     { this.variability = v; }
+  setBpm(bpm)       { this.bpm = bpm; }
+  setFreq(hz)       { this.freq = hz; }
+  setVolume(v)      { this.volume = v; }
+  setVar(v)         { this.variability = v; }
+  setWaveform(w)    { this.waveform = w; }
 }
 
 const fcfAudio = new FCFAudio();
@@ -708,6 +737,7 @@ function App() {
   const [fcfFreq,     setFcfFreq]    = useState(2200);
   const [fcfVol,      setFcfVol]     = useState(0.85);
   const [fcfVar,      setFcfVar]     = useState(false);
+  const [fcfWave,     setFcfWave]    = useState('doppler');
 
   const [proto,       setProto]      = useState(DEFAULT_PROTO);
   const [running,     setRunning]    = useState(false);
@@ -804,9 +834,10 @@ function App() {
       fcfAudio.setFreq(fcfFreq);
       fcfAudio.setVolume(fcfVol);
       fcfAudio.setVar(fcfVar);
+      fcfAudio.setWaveform(fcfWave);
       fcfAudio.start(fcfBpm);
       setFcfAudioOn(true);
-      addEv(`FCF audio iniciado — ${fcfBpm} bpm @ ${fcfFreq} Hz`, 'ok');
+      addEv(`FCF audio iniciado — ${fcfBpm} bpm · ${fcfWave} · ${fcfFreq} Hz`, 'ok');
     }
   };
 
@@ -970,6 +1001,31 @@ function App() {
                   {r.label} {r.range} bpm
                 </button>
               ))}
+            </div>
+
+            {/* Waveform selector */}
+            <div style={{marginBottom:18}}>
+              <div className="fcf-section-title">FORMA DE ONDA</div>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                {[
+                  { id:'doppler',  label:'Doppler',  desc:'Whoosh con barrido — clásico CTG' },
+                  { id:'cardiac',  label:'Cardíaco', desc:'Lub-dub — latido real' },
+                  { id:'mixed',    label:'Mixto',    desc:'Grave + Doppler — mejor para transductor' },
+                ].map(w => (
+                  <button key={w.id}
+                    onClick={() => { setFcfWave(w.id); fcfAudio.setWaveform(w.id); }}
+                    style={{
+                      padding:'8px 14px', borderRadius:'var(--r)', cursor:'pointer',
+                      border: fcfWave===w.id ? '1px solid var(--blue)' : '1px solid var(--border)',
+                      background: fcfWave===w.id ? '#5BBBFF15' : 'var(--panel2)',
+                      color: fcfWave===w.id ? 'var(--blue)' : 'var(--text)',
+                      textAlign:'left', minWidth:130,
+                    }}>
+                    <div style={{fontSize:13,fontWeight:600,marginBottom:2}}>{w.label}</div>
+                    <div style={{fontSize:10,color:'var(--dim)'}}>{w.desc}</div>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Audio config */}
