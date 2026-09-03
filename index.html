@@ -325,73 +325,107 @@ class Comm {
 //   'mixed'    → doppler + grave combinados (mejor para transductor + oído)
 class FCFAudio {
   constructor() {
-    this.ctx = null;
-    this.bpm = 140;
-    this.freq = 2200;       // Hz base para modo doppler
-    this.volume = 0.85;
+    this.ctx        = null;
+    this.masterGain = null;  // gain maestro — permite overdrive > 1.0
+    this.compressor = null;  // compresor de salida — maximiza nivel físico
+    this.bpm        = 140;
+    this.freq       = 2200;
+    this.volume     = 1.0;   // 0–5.0: valores > 1 = overdrive
     this.variability = false;
-    this.waveform = 'doppler'; // 'cardiac' | 'doppler' | 'mixed'
-    this.nextBeat = 0;
-    this._timer = null;
-    this.running = false;
+    this.waveform   = 'doppler';
+    this.nextBeat   = 0;
+    this._timer     = null;
+    this.running    = false;
   }
 
   _ensureCtx() {
-    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+      // Compresor maestro — aplana picos y satura la salida al máximo
+      this.compressor = this.ctx.createDynamicsCompressor();
+      this.compressor.threshold.value = -6;   // dB — agresivo
+      this.compressor.knee.value      =  2;
+      this.compressor.ratio.value     = 20;   // alta ratio = casi limitador
+      this.compressor.attack.value    = 0.001;
+      this.compressor.release.value   = 0.04;
+
+      // Gain maestro — llega hasta 5x antes del compresor
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.gain.value = this.volume;
+
+      this.masterGain.connect(this.compressor);
+      this.compressor.connect(this.ctx.destination);
+    }
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
 
-  // Componente grave tipo "thump" — da carácter de latido real
-  _thump(when, freqBase, vol, durEnv) {
+  // Destino de todos los osciladores
+  get _out() { return this.masterGain || this.ctx.destination; }
+
+  // Curva de clipping para overdrive — convierte seno en casi cuadrada a gain alto
+  _clipCurve() {
+    const n = 512, curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i * 2) / n - 1;
+      curve[i] = Math.tanh(3 * x);  // suave pero agresivo
+    }
+    return curve;
+  }
+
+  _thump(when, freqBase, relVol, durEnv) {
     const osc = this.ctx.createOscillator();
     const g   = this.ctx.createGain();
     osc.type  = 'sine';
-    // Barrido descendente de frecuencia: da el "punch" del latido
     osc.frequency.setValueAtTime(freqBase, when);
     osc.frequency.exponentialRampToValueAtTime(freqBase * 0.45, when + durEnv);
-    osc.connect(g); g.connect(this.ctx.destination);
+    osc.connect(g); g.connect(this._out);
     g.gain.setValueAtTime(0, when);
-    g.gain.linearRampToValueAtTime(vol, when + 0.010);
+    g.gain.linearRampToValueAtTime(relVol, when + 0.010);
     g.gain.exponentialRampToValueAtTime(0.001, when + durEnv);
     osc.start(when); osc.stop(when + durEnv + 0.01);
   }
 
-  // Componente HF con sweep — da el "whoosh" del Doppler + estimula transductor
-  _whoosh(when, freqStart, vol, durEnv) {
-    const osc = this.ctx.createOscillator();
-    const g   = this.ctx.createGain();
-    osc.type  = 'sine';
+  _whoosh(when, freqStart, relVol, durEnv) {
+    const osc    = this.ctx.createOscillator();
+    const g      = this.ctx.createGain();
+    const shaper = this.ctx.createWaveShaper();
+
+    // Seno siempre — el WaveShaper agrega armónicos suaves con el overdrive
+    // sin perder el carácter de latido/swoosh
+    osc.type = 'sine';
     osc.frequency.setValueAtTime(freqStart, when);
     osc.frequency.exponentialRampToValueAtTime(freqStart * 0.65, when + durEnv);
-    osc.connect(g); g.connect(this.ctx.destination);
+
+    shaper.curve     = this._clipCurve();
+    shaper.oversample = '4x';
+
+    osc.connect(g);
+    g.connect(shaper);
+    shaper.connect(this._out);
+
     g.gain.setValueAtTime(0, when);
-    g.gain.linearRampToValueAtTime(vol, when + 0.008);
+    g.gain.linearRampToValueAtTime(relVol, when + 0.008);
     g.gain.exponentialRampToValueAtTime(0.001, when + durEnv);
     osc.start(when); osc.stop(when + durEnv + 0.01);
   }
 
   _beat(when) {
-    const v = this.volume;
     const f = this.freq;
-
+    // relVol = 1.0 siempre; el masterGain y el compresor controlan el nivel real
     if (this.waveform === 'cardiac') {
-      // LUB: thump grave ~90Hz, 110ms — el "primer ruido cardíaco"
-      this._thump(when,          90,      v,      0.11);
-      // DUB: thump más agudo ~130Hz, 70ms — el "segundo ruido cardíaco", 180ms después
-      this._thump(when + 0.18,   130,     v*0.70, 0.07);
+      this._thump(when,         90,  1.0, 0.11);
+      this._thump(when + 0.18, 130,  0.70, 0.07);
 
     } else if (this.waveform === 'doppler') {
-      // Un whoosh HF con barrido — clásico del monitor fetal Doppler
-      // Doble pulso (simula apertura + cierre de válvulas)
-      this._whoosh(when,         f,       v,      0.09);
-      this._whoosh(when + 0.16,  f*0.85,  v*0.60, 0.06);
+      this._whoosh(when,        f,       1.0,  0.09);
+      this._whoosh(when + 0.16, f*0.85,  0.60, 0.06);
 
     } else { // 'mixed'
-      // Grave (suena como latido) + HF (estimula transductor)
-      this._thump(when,          80,      v,      0.12);   // lub grave
-      this._whoosh(when,         f,       v*0.55, 0.07);   // hf simultáneo
-      this._thump(when + 0.18,   120,     v*0.65, 0.07);   // dub
-      this._whoosh(when + 0.18,  f*0.85,  v*0.30, 0.05);   // hf dub
+      this._thump(when,          80,  1.0,  0.12);
+      this._whoosh(when,         f,   0.80, 0.07);
+      this._thump(when + 0.18,  120,  0.65, 0.07);
+      this._whoosh(when + 0.18, f*0.85, 0.40, 0.05);
     }
   }
 
@@ -401,30 +435,30 @@ class FCFAudio {
       const bpmNow = this.variability
         ? this.bpm + (Math.random() - 0.5) * 10
         : this.bpm;
-      const interval = 60.0 / Math.max(40, bpmNow);
       this._beat(this.nextBeat);
-      this.nextBeat += interval;
+      this.nextBeat += 60.0 / Math.max(40, bpmNow);
     }
   }
 
   start(bpm) {
     this._ensureCtx();
     this.bpm = bpm;
-    this.running = true;
-    this.nextBeat = this.ctx.currentTime + 0.05;
-    this._timer = setInterval(() => this._schedule(), 40);
+    this.masterGain.gain.value = this.volume;
+    this.running   = true;
+    this.nextBeat  = this.ctx.currentTime + 0.05;
+    this._timer    = setInterval(() => this._schedule(), 40);
   }
 
-  stop() {
-    clearInterval(this._timer);
-    this.running = false;
-  }
+  stop() { clearInterval(this._timer); this.running = false; }
 
-  setBpm(bpm)       { this.bpm = bpm; }
-  setFreq(hz)       { this.freq = hz; }
-  setVolume(v)      { this.volume = v; }
-  setVar(v)         { this.variability = v; }
-  setWaveform(w)    { this.waveform = w; }
+  setBpm(bpm)    { this.bpm = bpm; }
+  setFreq(hz)    { this.freq = hz; }
+  setVolume(v)   {
+    this.volume = v;
+    if (this.masterGain) this.masterGain.gain.value = v;
+  }
+  setVar(v)      { this.variability = v; }
+  setWaveform(w) { this.waveform = w; }
 }
 
 const fcfAudio = new FCFAudio();
@@ -1047,14 +1081,29 @@ function App() {
               </div>
 
               <div style={{marginBottom:12}}>
-                <div className="range-wrap" style={{maxWidth:220}}>
+                <div className="range-wrap" style={{maxWidth:260}}>
                   <div className="range-lbl">
-                    <span>Volumen</span>
-                    <span style={{color:'var(--blue)'}}>{Math.round(fcfVol*100)}%</span>
+                    <span>Nivel de salida</span>
+                    <span style={{color: fcfVol > 1.5 ? 'var(--orange)' : 'var(--blue)'}}>
+                      {fcfVol <= 1.0
+                        ? `${Math.round(fcfVol*100)}%`
+                        : `×${fcfVol.toFixed(1)} OVERDRIVE`}
+                    </span>
                   </div>
-                  <input type="range" min={0} max={1} step={0.05}
+                  <input type="range" min={0} max={5} step={0.1}
                     value={fcfVol} onChange={e=>{ const v=Number(e.target.value); setFcfVol(v); fcfAudio.setVolume(v); }} />
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:10,color:'var(--dim)',marginTop:2}}>
+                    <span>0</span>
+                    <span style={{color:'var(--blue)'}}>nominal (1.0)</span>
+                    <span style={{color:'var(--orange)'}}>×5 máx</span>
+                  </div>
                 </div>
+                {fcfVol > 1.0 && (
+                  <p style={{fontSize:11,color:'var(--orange)',marginTop:6,lineHeight:1.5}}>
+                    Overdrive activo — el compresor maestro maximiza el nivel físico del parlante.
+                    Para detección confiable conectá el jack al PAM8403.
+                  </p>
+                )}
               </div>
 
               <div className="var-toggle" style={{marginBottom:16}}>
