@@ -19,7 +19,8 @@ ESP32
   ├── PWM → MOSFET → Bomba DC (reciclada de tensiómetro)
   ├── GPIO → Solenoide entrada (inflar)
   ├── GPIO → Solenoide escape (desinflar)
-  └── ADC ← Sensor de presión MPX5050
+  ├── ADC ← Sensor de presión MPX5050
+  └── PWM → Amplificador PAM8403 → Parlante (latido fetal FCF)
 
 Cámara 3D (PLA)
   └── Adaptadores intercambiables por modelo de transductor
@@ -40,6 +41,8 @@ Cámara 3D (PLA)
 | Sensor MPX5050 / MPXV5050GP | Compra | 0–50 kPa = 0–375 mmHg |
 | MOSFET IRF520 o similar | Compra | Control PWM de la bomba |
 | Diodo flyback 1N4007 | Compra | Protección en solenoides |
+| Amplificador PAM8403 | Compra (~$1 USD) | Módulo 2×3W, alimentación 5V |
+| Parlante 8Ω 1–3W | Compra o reciclado | Frente al transductor Doppler |
 | Cámara + adaptadores | Impresión 3D (PLA) | Diseño universal intercambiable |
 
 ### Conexiones ESP32
@@ -51,9 +54,25 @@ GPIO 27  →  Solenoide escape (desinflar)  — normalmente cerrado
 GPIO 34  ←  Sensor presión MPX5050 (Vout) — solo entrada ADC
 GPIO 32  →  LED rojo (error / límite)
 GPIO 33  →  LED verde (activo / estado)
+GPIO 14  →  Entrada de audio del PAM8403 (latido fetal FCF)
 GND          Común a todos los módulos
 3.3V / 5V    Según módulo
 ```
+
+### Parlante FCF (audio de latido fetal)
+
+El ESP32 genera el tono directamente por PWM (`ledcWriteTone`) en GPIO14.
+Para escucharlo con buena calidad, conectalo así:
+
+```
+GPIO14 ──[ resistencia 1kΩ ]──┬── entrada L/R del PAM8403
+                               │
+                              [ capacitor 10nF a GND ]   ← filtro pasabajos simple
+```
+
+Ese filtro RC suaviza el cuadrado PWM antes de entrar al amplificador.
+Para pruebas rápidas sin amplificador, un buzzer piezo pasivo puede
+conectarse directo entre GPIO14 y GND (sonido más débil, sin filtro).
 
 ### Calibración del sensor
 
@@ -113,18 +132,21 @@ Toda la comunicación es **JSON por línea** a 115200 baudios (Serial) o WebSock
 // Mantener presión fija para calibración
 {"cmd": "calibrate", "pressure": 30}
 
-// Ejecutar protocolo de contracciones
+// Ejecutar protocolo de contracciones (fcf opcional: bpm del latido para ese grupo)
 {
   "cmd": "run",
   "protocol": [
-    {"mmhg": 10, "rise": 20, "peak": 20, "fall": 20, "interval": 60, "repeat": 3},
-    {"mmhg": 30, "rise": 25, "peak": 30, "fall": 25, "interval": 60, "repeat": 3},
-    {"mmhg": 55, "rise": 30, "peak": 30, "fall": 30, "interval": 60, "repeat": 3}
+    {"mmhg": 10, "rise": 20, "peak": 20, "fall": 20, "interval": 60, "repeat": 3, "fcf": 140},
+    {"mmhg": 30, "rise": 25, "peak": 30, "fall": 25, "interval": 60, "repeat": 3, "fcf": 140},
+    {"mmhg": 55, "rise": 30, "peak": 30, "fall": 30, "interval": 60, "repeat": 3, "fcf": 130}
   ]
 }
 
 // Ajustar PID en tiempo real
 {"cmd": "pid", "kp": 10.0, "ki": 0.8, "kd": 0.2}
+
+// Controlar el parlante FCF directamente en el ESP32 (todos los campos opcionales)
+{"cmd": "fcf", "on": true, "bpm": 140, "freq": 2200}
 ```
 
 ### Telemetría ← ESP32 (cada 100 ms)
@@ -153,6 +175,7 @@ Toda la comunicación es **JSON por línea** a 115200 baudios (Serial) o WebSock
 {"event": "done",        "data": {"total_contracciones": 3}}
 {"event": "stopped",     "data": {}}
 {"event": "calibrating", "data": {"target": 30.0}}
+{"event": "fcf_ok",      "data": {"on": true, "bpm": 140, "freq": 2200}}
 ```
 
 ---
@@ -248,7 +271,7 @@ simulador-fetal/
 
 - [x] Firmware PID de presión con perfiles de onda
 - [x] PWA con protocolo configurable y log de calibración
-- [ ] Integración FCF al ESP32 (control de parlante directo)
+- [x] Integración FCF al ESP32 (control de parlante directo)
 - [ ] Sincronización FCF–TOCO (desaceleraciones tipo I, II, III)
 - [ ] Diseño CAD de la cámara universal (Fusion 360 / FreeCAD)
 - [ ] Adaptadores 3D para modelos Philips, GE, Mindray
