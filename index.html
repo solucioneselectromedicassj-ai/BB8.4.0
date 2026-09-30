@@ -858,11 +858,12 @@ function App() {
 
   const send = obj => commRef.current?.send(obj);
 
-  // FCF audio control
+  // FCF audio control (browser Web Audio + parlante del ESP32 en simultáneo)
   const toggleFCFAudio = () => {
     if (fcfAudioOn) {
       fcfAudio.stop();
       setFcfAudioOn(false);
+      send({cmd:'fcf', on:false});
       addEv('FCF audio detenido', 'warn');
     } else {
       fcfAudio.setFreq(fcfFreq);
@@ -871,6 +872,7 @@ function App() {
       fcfAudio.setWaveform(fcfWave);
       fcfAudio.start(fcfBpm);
       setFcfAudioOn(true);
+      send({cmd:'fcf', on:true, bpm:fcfBpm, freq:fcfFreq});
       addEv(`FCF audio iniciado — ${fcfBpm} bpm · ${fcfWave} · ${fcfFreq} Hz`, 'ok');
     }
   };
@@ -878,6 +880,7 @@ function App() {
   const changeBpm = (v) => {
     setFcfBpm(v);
     fcfAudio.setBpm(v);
+    if (fcfAudioOn) send({cmd:'fcf', bpm:v});
   };
 
   const doZero = () => { send({cmd:'zero'}); addEv('Zeroing (4s)...'); };
@@ -992,9 +995,10 @@ function App() {
         {tab==='fcf' && (
           <div className="fcf-panel">
             <p className="hint">
-              El audio FCF se genera directamente en el browser y sale por la salida de audio del dispositivo
-              (jack, Bluetooth, o parlante según configuración del sistema). Conectá el jack al amplificador
-              del parlante frente al transductor Doppler.
+              El audio FCF suena en dos lugares a la vez: en el browser (sale por jack, Bluetooth o
+              parlante del celular/PC, hacia el amplificador frente al transductor Doppler) y, si el
+              ESP32 está conectado, también en su parlante propio (GPIO14) — así el simulador funciona
+              con sonido aunque no haya una PWA conectada.
             </p>
 
             {/* BPM control */}
@@ -1073,7 +1077,7 @@ function App() {
                     <span style={{color:'var(--blue)'}}>{fcfFreq} Hz</span>
                   </div>
                   <input type="range" min={800} max={4000} step={100}
-                    value={fcfFreq} onChange={e=>{ const v=Number(e.target.value); setFcfFreq(v); fcfAudio.setFreq(v); }} />
+                    value={fcfFreq} onChange={e=>{ const v=Number(e.target.value); setFcfFreq(v); fcfAudio.setFreq(v); if (fcfAudioOn) send({cmd:'fcf', freq:v}); }} />
                 </div>
                 <div className="fcf-freq-note">
                   Ajustá hasta que el transductor<br/>Doppler detecte la señal.

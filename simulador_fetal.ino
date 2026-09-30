@@ -14,10 +14,16 @@
  *   GPIO 34 → ADC sensor presión (solo entrada, 0–3.3V)
  *   GPIO 32 → LED rojo (error)
  *   GPIO 33 → LED verde (activo)
+ *   GPIO 14 → Parlante FCF (latido fetal), vía amplificador PAM8403
+ *              o buzzer piezo para pruebas
  *
  * Sensor de presión asumido: MPX5050 / MPXV5050GP
  *   Rango: 0–50 kPa = 0–375 mmHg (suficiente para 0–100 mmHg)
  *   Vout = Vs × (0.018 × P_kPa + 0.04)   Vs = 3.3V
+ *
+ * Audio FCF: tono "lub-dub" generado por PWM (ledcWriteTone) a la
+ * frecuencia y bpm configurados. Reproduce localmente en el ESP32,
+ * independiente de si hay PWA conectada (modo autónomo).
  */
 
 #include <Arduino.h>
@@ -37,6 +43,11 @@ const int   WS_PORT   = 81;
 #define PIN_SENSOR_P   34
 #define PIN_LED_R      32
 #define PIN_LED_G      33
+#define PIN_SPK        14
+
+// ─── PWM CHANNELS ────────────────────────────────────────────────────
+#define CH_BOMBA       0
+#define CH_AUDIO       1
 
 // ─── CONSTANTES ──────────────────────────────────────────────────────
 #define MAX_MMHG         110.0f   // Límite de seguridad absoluto
@@ -65,6 +76,7 @@ struct Contraccion {
   float fall_s;      // duración descenso
   float interval_s;  // espera entre contracciones
   int   repeat;      // repeticiones de este grupo
+  float fcf;         // bpm de latido fetal para este grupo (0 = sin cambio)
 };
 
 // ─── VARIABLES GLOBALES ──────────────────────────────────────────────
@@ -92,13 +104,21 @@ unsigned long t_telem  = 0;
 unsigned long t_led    = 0;
 bool          led_g_st = false;
 
+// FCF (audio latido fetal)
+bool          fcf_on         = false;
+float         fcf_bpm        = 140.0f;
+float         fcf_freq       = 2200.0f;
+uint8_t       fcf_stage      = 0;   // 0=espera, 1=lub, 2=gap, 3=dub
+unsigned long fcf_next_beat  = 0;
+unsigned long fcf_stage_till = 0;
+
 // Comunicación
 WebSocketsServer ws(WS_PORT);
 bool wifi_ok = false;
 
 // ─── HARDWARE ────────────────────────────────────────────────────────
 void setBomba(int pwm) {
-  ledcWrite(0, constrain(pwm, 0, 255));
+  ledcWrite(CH_BOMBA, constrain(pwm, 0, 255));
 }
 
 void setValvulas(bool entrada, bool salida) {
@@ -164,6 +184,50 @@ void pid(float target) {
     // Mantener con bomba mínima
     setValvulas(true, false);
     setBomba(max(20, (int)(out * 0.3f)));
+  }
+}
+
+// ─── AUDIO FCF (latido fetal) ────────────────────────────────────────
+// Máquina de estados no bloqueante: lub (grave) → gap → dub (más agudo) → gap
+// hasta completar el intervalo del bpm configurado. Suena por PIN_SPK.
+void audioFCF() {
+  if (!fcf_on) {
+    if (fcf_stage != 0) { ledcWriteTone(CH_AUDIO, 0); fcf_stage = 0; }
+    return;
+  }
+
+  unsigned long now = millis();
+  unsigned long beatMs = (unsigned long)(60000.0f / constrain(fcf_bpm, 40.0f, 220.0f));
+
+  switch (fcf_stage) {
+    case 0:  // esperando el próximo latido
+      if (now >= fcf_next_beat) {
+        ledcWriteTone(CH_AUDIO, (int)fcf_freq);
+        fcf_stage_till = now + 90;
+        fcf_stage = 1;
+      }
+      break;
+    case 1:  // fin del "lub"
+      if (now >= fcf_stage_till) {
+        ledcWriteTone(CH_AUDIO, 0);
+        fcf_stage_till = now + 70;
+        fcf_stage = 2;
+      }
+      break;
+    case 2:  // inicio del "dub"
+      if (now >= fcf_stage_till) {
+        ledcWriteTone(CH_AUDIO, (int)(fcf_freq * 0.75f));
+        fcf_stage_till = now + 70;
+        fcf_stage = 3;
+      }
+      break;
+    case 3:  // fin del "dub" — programa el próximo latido
+      if (now >= fcf_stage_till) {
+        ledcWriteTone(CH_AUDIO, 0);
+        fcf_next_beat = now + max(60UL, beatMs > 230 ? beatMs - 230 : beatMs);
+        fcf_stage = 0;
+      }
+      break;
   }
 }
 
@@ -246,6 +310,7 @@ void procesarCmd(const String& line) {
       ct.fall_s     = max(5.0f,  (float)(c["fall"]     | 20.0f));
       ct.interval_s = max(10.0f, (float)(c["interval"] | 60.0f));
       ct.repeat     = max(1,     (int)  (c["repeat"]   | 1));
+      ct.fcf        = constrain((float)(c["fcf"]       | 0.0f), 0.0f, 220.0f);
     }
     if (proto_len == 0) return;
     cont_idx = 0;
@@ -253,7 +318,18 @@ void procesarCmd(const String& line) {
     estado   = RISE;
     t_estado = millis();
     pid_integral = 0;
+    if (protocolo[0].fcf > 0) fcf_bpm = protocolo[0].fcf;
     evento("started", "{\"groups\":" + String(proto_len) + "}");
+
+  // FCF: control directo del parlante (audio latido fetal en el ESP32)
+  } else if (strcmp(cmd, "fcf") == 0) {
+    if (doc.containsKey("bpm"))  fcf_bpm  = constrain((float)doc["bpm"],  40.0f, 220.0f);
+    if (doc.containsKey("freq")) fcf_freq = constrain((float)doc["freq"], 300.0f, 4000.0f);
+    if (doc.containsKey("on"))   fcf_on   = doc["on"];
+    if (!fcf_on) { ledcWriteTone(CH_AUDIO, 0); fcf_stage = 0; }
+    evento("fcf_ok", "{\"on\":" + String(fcf_on ? "true" : "false") +
+                     ",\"bpm\":" + String(fcf_bpm) +
+                     ",\"freq\":" + String(fcf_freq) + "}");
 
   // PID: ajuste de parámetros en tiempo real
   } else if (strcmp(cmd, "pid") == 0) {
@@ -369,6 +445,7 @@ void maquina() {
           estado   = RISE;
           t_estado = millis();
           pid_integral = 0;
+          if (protocolo[cont_idx].fcf > 0) fcf_bpm = protocolo[cont_idx].fcf;
         }
       }
       break;
@@ -386,8 +463,13 @@ void setup() {
   pinMode(PIN_LED_G,    OUTPUT);
 
   // PWM bomba — canal 0, 20 kHz, 8 bits
-  ledcSetup(0, 20000, 8);
-  ledcAttachPin(PIN_BOMBA, 0);
+  ledcSetup(CH_BOMBA, 20000, 8);
+  ledcAttachPin(PIN_BOMBA, CH_BOMBA);
+
+  // PWM audio FCF — canal 1, tono variable, 10 bits
+  ledcSetup(CH_AUDIO, 2000, 10);
+  ledcAttachPin(PIN_SPK, CH_AUDIO);
+  ledcWrite(CH_AUDIO, 512);  // 50% duty — ledcWriteTone solo cambia la frecuencia
 
   safe();  // Estado seguro en arranque
 
@@ -438,6 +520,9 @@ void loop() {
 
   // 4. Máquina de estados
   maquina();
+
+  // 4b. Audio FCF (latido fetal, no bloqueante)
+  audioFCF();
 
   // 5. Telemetría periódica
   if (millis() - t_telem >= (unsigned long)TELEM_MS) {
