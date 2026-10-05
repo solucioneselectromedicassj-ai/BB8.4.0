@@ -221,6 +221,39 @@ input[type=number]::-webkit-inner-spin-button { opacity: .3; }
 .ok-badge  { display: inline-block; padding: 1px 7px; border-radius: 3px; background: #00EDA015; color: var(--teal); font-size: 10px; }
 .err-badge { display: inline-block; padding: 1px 7px; border-radius: 3px; background: #FF526815; color: var(--red); font-size: 10px; }
 
+/* ── DATOS DEL EQUIPO / CERTIFICADO ──────────────────────── */
+.equipo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 480px) { .equipo-grid { grid-template-columns: 1fr; } }
+
+#cert-print { display: none; }
+@media print {
+  body * { visibility: hidden; }
+  #cert-print, #cert-print * { visibility: visible; }
+  #cert-print {
+    display: block; position: absolute; top: 0; left: 0; width: 100%;
+    background: #fff; color: #1B2338; padding: 20px; font-family: 'Inter', sans-serif;
+  }
+  .cert-head { display: flex; justify-content: space-between; border-bottom: 2px solid #00926F; padding-bottom: 12px; margin-bottom: 16px; }
+  .cert-brand { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 18px; letter-spacing: 2px; color: #00926F; }
+  .cert-brand-sub { font-size: 11px; color: #5B6B8C; }
+  .cert-id { text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5B6B8C; }
+  #cert-print h1 { font-size: 17px; margin: 0 0 14px; color: #1B2338; }
+  .cert-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; margin-bottom: 16px; font-size: 12px; }
+  .cert-fields div { display: flex; justify-content: space-between; border-bottom: 1px dotted #D7DEEC; padding-bottom: 3px; }
+  .cert-fields span { color: #5B6B8C; }
+  .cert-sec-title { font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: #5B6B8C; margin-bottom: 6px; }
+  .cert-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 8px; }
+  .cert-table th { text-align: left; font-size: 10px; color: #5B6B8C; border-bottom: 1.5px solid #D7DEEC; padding: 5px; }
+  .cert-table td { padding: 5px; border-bottom: 1px solid #D7DEEC; font-family: 'JetBrains Mono', monospace; }
+  .cert-summary { display: flex; justify-content: space-between; font-size: 11px; color: #5B6B8C; padding: 8px 0; border-top: 1px solid #D7DEEC; margin-bottom: 12px; }
+  .cert-verdict { padding: 10px 14px; border-radius: 6px; margin-bottom: 24px; font-size: 13px; }
+  .cert-verdict.ok { background: #1F9D5720; border: 1px solid #1F9D57; color: #1F9D57; }
+  .cert-verdict.bad { background: #C21E3C20; border: 1px solid #C21E3C; color: #C21E3C; }
+  .cert-sign { font-size: 11px; color: #5B6B8C; width: 200px; }
+  .cert-sign-line { border-top: 1px solid #1B2338; margin-bottom: 6px; }
+  @page { margin: 15mm; }
+}
+
 /* ── EVENT LOG ───────────────────────────────────────────── */
 .log-panel { display: flex; flex-direction: column; gap: 3px; }
 .log-e { display: flex; gap: 10px; align-items: baseline; padding: 4px 7px; border-radius: 4px; }
@@ -780,6 +813,12 @@ function App() {
   const [calLog,      setCalLog]     = useState([]);
   const [monReading,  setMonReading] = useState('');
 
+  // Datos del equipo que se está probando (para el certificado)
+  const [equipo, setEquipo] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('sem-equipo') || '{}'); } catch(e) { return {}; }
+  });
+  const [certId, setCertId] = useState('');
+
   const [events,      setEvents]     = useState([]);
   const [tab,         setTab]        = useState('protocol');
 
@@ -893,6 +932,26 @@ function App() {
     setCalLog(prev => [...prev, {t:calPoint, m:v}]);
     setMonReading('');
     addEv(`Registrado: ${calPoint} → ${v.toFixed(1)} mmHg`);
+  };
+
+  const updEquipo = (k, v) => setEquipo(prev => {
+    const next = {...prev, [k]: v};
+    try { localStorage.setItem('sem-equipo', JSON.stringify(next)); } catch(e) {}
+    return next;
+  });
+
+  const genCertificado = () => {
+    let n = 1;
+    try { n = parseInt(localStorage.getItem('sem-cert-seq')||'0', 10) + 1; localStorage.setItem('sem-cert-seq', String(n)); } catch(e) {}
+    const id = `SEM-${new Date().getFullYear()}-${String(n).padStart(4,'0')}`;
+    setCertId(id);
+    addEv(`Certificado generado: ${id}`, 'ok');
+    setTimeout(() => {
+      const prevTitle = document.title;
+      document.title = `Certificado ${id}`;
+      window.print();
+      document.title = prevTitle;
+    }, 50);
   };
 
   const totalMin = () => Math.round(proto.reduce((a,r) => a+(r.rise+r.peak+r.fall+r.interval)*r.repeat, 0)/60);
@@ -1127,6 +1186,17 @@ function App() {
 
         {tab==='cal' && (
           <div>
+            <div className="cal-reg" style={{marginBottom:16}}>
+              <h4>DATOS DEL EQUIPO A PROBAR</h4>
+              <div className="equipo-grid">
+                <input className="mon-input" placeholder="Institución / hospital" value={equipo.institucion||''} onChange={e=>updEquipo('institucion', e.target.value)} />
+                <input className="mon-input" placeholder="Servicio (ej. Obstetricia)" value={equipo.servicio||''} onChange={e=>updEquipo('servicio', e.target.value)} />
+                <input className="mon-input" placeholder="Equipo (marca / modelo)" value={equipo.modelo||''} onChange={e=>updEquipo('modelo', e.target.value)} />
+                <input className="mon-input" placeholder="N° de serie" value={equipo.serie||''} onChange={e=>updEquipo('serie', e.target.value)} />
+                <input className="mon-input" placeholder="Transductor / adaptador" value={equipo.transductor||''} onChange={e=>updEquipo('transductor', e.target.value)} />
+                <input className="mon-input" placeholder="Técnico responsable" value={equipo.tecnico||''} onChange={e=>updEquipo('tecnico', e.target.value)} />
+              </div>
+            </div>
             <p className="hint">
               El dispositivo mantiene la presión seleccionada. Registrá la lectura del monitor fetal
               en cada punto para construir la curva de linealidad del transductor.
@@ -1157,7 +1227,10 @@ function App() {
             <div className="sec-title">CURVA DE LINEALIDAD</div>
             <CalLog log={calLog} />
             {calLog.length>0 && (
-              <button className="btn-ghost" style={{marginTop:10}} onClick={()=>setCalLog([])}>Limpiar</button>
+              <div style={{display:'flex',gap:8,marginTop:10}}>
+                <button className="btn-primary" onClick={genCertificado}>🖨 Generar certificado</button>
+                <button className="btn-ghost" onClick={()=>setCalLog([])}>Limpiar</button>
+              </div>
             )}
           </div>
         )}
@@ -1176,6 +1249,69 @@ function App() {
           </div>
         )}
 
+      </div>
+
+      {/* CERTIFICADO IMPRIMIBLE — solo visible al imprimir / guardar como PDF */}
+      <div id="cert-print">
+        <div className="cert-head">
+          <div>
+            <div className="cert-brand">SEM</div>
+            <div className="cert-brand-sub">Soluciones Electromédicas SJ · Pocito, San Juan</div>
+          </div>
+          <div className="cert-id">
+            N° certificado: <strong>{certId}</strong><br/>
+            Emitido: <strong>{new Date().toLocaleDateString('es-AR')}</strong>
+          </div>
+        </div>
+        <h1>Certificado de verificación — Transductor TOCO</h1>
+        <div className="cert-fields">
+          <div><span>Institución</span><strong>{equipo.institucion || '—'}</strong></div>
+          <div><span>Servicio</span><strong>{equipo.servicio || '—'}</strong></div>
+          <div><span>Equipo probado</span><strong>{equipo.modelo || '—'}</strong></div>
+          <div><span>N° de serie</span><strong>{equipo.serie || '—'}</strong></div>
+          <div><span>Transductor</span><strong>{equipo.transductor || '—'}</strong></div>
+          <div><span>Técnico</span><strong>{equipo.tecnico || '—'}</strong></div>
+          <div><span>Instrumento usado</span><strong>Simulador Fetal BB8.4.0</strong></div>
+          <div><span>Próxima verificación</span><strong>{(() => { const d = new Date(); d.setFullYear(d.getFullYear()+1); return d.toLocaleDateString('es-AR'); })()}</strong></div>
+        </div>
+        <div className="cert-sec-title">Puntos de presión verificados</div>
+        <table className="cert-table">
+          <thead><tr><th>Set point</th><th>Lectura monitor</th><th>Error</th><th>Resultado</th></tr></thead>
+          <tbody>
+            {calLog.map((r,i) => {
+              const e = r.m - r.t; const ok = Math.abs(e) <= 5;
+              return (
+                <tr key={i}>
+                  <td>{r.t} mmHg</td>
+                  <td>{r.m.toFixed(1)} mmHg</td>
+                  <td>{e>0?'+':''}{e.toFixed(1)}</td>
+                  <td>{ok ? 'OK' : 'FUERA'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {calLog.length > 0 && (() => {
+          const errs = calLog.map(r => Math.abs(r.m - r.t));
+          const maxE = Math.max(...errs);
+          const avgE = errs.reduce((a,b) => a+b, 0) / errs.length;
+          const pass = maxE <= 5;
+          return (
+            <React.Fragment>
+              <div className="cert-summary">
+                <span>Error máximo: <strong>{maxE.toFixed(1)} mmHg</strong> · Error promedio: <strong>{avgE.toFixed(1)} mmHg</strong></span>
+                <span>Tolerancia aceptada: <strong>± 5 mmHg</strong></span>
+              </div>
+              <div className={`cert-verdict ${pass ? 'ok' : 'bad'}`}>
+                <strong>{pass ? 'Transductor y cadena de medición aptos' : 'Requiere ajuste — fuera de tolerancia'}</strong>
+              </div>
+            </React.Fragment>
+          );
+        })()}
+        <div className="cert-sign">
+          <div className="cert-sign-line"></div>
+          Firma del técnico responsable
+        </div>
       </div>
     </div>
   );
